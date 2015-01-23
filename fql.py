@@ -63,7 +63,6 @@ if __name__ == '__main__':
         sys.exit()
 
     if args:
-        print ' '.join(args)
         yacc.parse(' '.join(args))
         sys.exit()
 
