@@ -41,7 +41,7 @@
           -----------------------------------------------------------------------------------------------------
 
     2) list all the python files name and size.
-        > python fql.py 'select name, size from name like "%.py$"'
+        > python fql.py 'select name, size from . where name like "%.py$"'
         > -----------------------------------
           | name                | size      |
           -----------------------------------
@@ -51,7 +51,7 @@
           -----------------------------------
 
     3) list all the python files which are created after '2015-01-23 19:50:00'
-        > python fql.py 'select * from name like "%.py$" and ctime > 2015-01-23 19:50:00'
+        > python fql.py 'select * from . where name like "%.py$" and ctime > 2015-01-23 19:50:00'
         > -----------------------------------------------------------------------------------------------------
           | name                | ctime               | mtime               | atime               | size      |
           -----------------------------------------------------------------------------------------------------
@@ -61,7 +61,7 @@
           -----------------------------------------------------------------------------------------------------
 
     4) list all the python files which are created after '2015-01-23 19:50:00', and the files named 'README.md'
-        > python fql.py 'select * from name like "%.py$" and ctime > 2015-01-23 19:50:00'
+        > python fql.py 'select * from . where name like "%.py$" and ctime > 2015-01-23 19:50:00'
         > -----------------------------------------------------------------------------------------------------
           | name                | ctime               | mtime               | atime               | size      |
           -----------------------------------------------------------------------------------------------------
