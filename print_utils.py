@@ -71,6 +71,8 @@ class FieldPrinter(object):
         print self._asep_line
         for func in self._accufuncs:
             field_name = '%s(%s)' % func.desp()
+            if func.fname() is not None:
+                field_name += ': %s' % func.fname()
             print ('| %-' + str(self._field_col - 1) + 's') % field_name,
 
             if func.desp()[1] == 'st_size':
@@ -85,9 +87,9 @@ class FieldPrinter(object):
             print '|'
             print self._asep_line
 
-    def _get_sep_line(self, fields):
-        padding = len(fields) * 2 + 1
-        count = reduce(lambda x, y: x + y, fields, 0)
+    def _get_sep_line(self, fields_len):
+        padding = len(fields_len) * 2 + 1
+        count = reduce(lambda x, y: x + y, fields_len, 0)
         sep_line = ''.join(itertools.repeat('-', count + padding))
 
         return sep_line

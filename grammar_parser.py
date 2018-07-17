@@ -132,7 +132,7 @@ def travel_file_tree(start_point, accu_funcs, selector, printer):
             printer.print_finfo(fname, statinfo)
 
             for accufunc in accu_funcs:
-                accufunc(finfo)
+                accufunc(finfo, fname)
 
         if os.path.isdir(f):
             travel_file_tree(f, accu_funcs, selector, printer)
