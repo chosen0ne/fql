@@ -235,7 +235,7 @@ def p_accu_func_stmt2(p):
         p[0] = []
 
     f = 'st_' + p[5].lower()
-    op = p[1]
+    op = p[3]
     accu_obj_name = op[0].upper() + op[1:].lower() + 'FuncCls'
     accu_obj = accu_func.__dict__[accu_obj_name]
 
