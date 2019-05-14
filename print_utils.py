@@ -20,7 +20,7 @@ fields_info = {
 
 
 class FieldPrinter(object):
-    def __init__(self, fields, accufuncs):
+    def __init__(self, from_dir, fields, accufuncs):
         if len(fields) == 1 and '*' in fields:
             select_fields_info = fields_info
             self._select_fields = allfields
@@ -30,6 +30,7 @@ class FieldPrinter(object):
             for f in self._select_fields:
                 select_fields_info[f] = fields_info[f]
 
+        self._from_dir = from_dir
         self._accufuncs = accufuncs
         self._fsep_line = self._get_sep_line(select_fields_info.values())
 
@@ -70,7 +71,7 @@ class FieldPrinter(object):
 
         print self._asep_line
         for func in self._accufuncs:
-            field_name = '%s(%s)' % func.desp()
+            field_name = ('%s(%s)' % func.desp() ) + ' of %s' % self._from_dir
             if func.fname() is not None:
                 field_name += ': %s' % func.fname()
             print ('| %-' + str(self._field_col - 1) + 's') % field_name,

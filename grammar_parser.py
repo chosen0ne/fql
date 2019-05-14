@@ -113,7 +113,7 @@ def execute(s_stmt, f_stmt, w_stmt):
         show_fields = show_fields.keys()
 
     # print table, info for echo row
-    printer = FieldPrinter(show_fields, accu_funcs)
+    printer = FieldPrinter(f_stmt, show_fields, accu_funcs)
     printer.print_title()
 
     travel_file_tree(f_stmt, accu_funcs, w_stmt, printer)
