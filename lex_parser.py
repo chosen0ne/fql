@@ -17,6 +17,7 @@ reserved = {
     'by': 'BY',
     'asc': 'ASC',
     'desc': 'DESC',
+    'limit': 'LIMIT',
     'or': 'OR',
     'not': 'NOT',
     'like': 'LIKE',
@@ -55,6 +56,7 @@ t_ORDER = r'(order)|(ORDER)'
 t_BY = r'(by)|(BY)'
 t_ASC = r'(asc)|(ASC)'
 t_DESC = r'(desc)|(DESC)'
+t_LIMIT = r'(limit)|(LIMIT)'
 t_OR = r'(or)|(OR)'
 t_NOT = r'(not)|(NOT)'
 t_LE = r'<='

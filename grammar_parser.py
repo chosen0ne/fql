@@ -20,10 +20,12 @@ grammar:
               | SELECT select_statement where_statement
               | SELECT select_statement from_statement
               | SELECT from_statement where_statement
+              | statement order_statement limit_statement
               | SELECT where_statement
               | SELECT select_statement
               | SELECT from_statement
               | statement order_statement
+              | statement limit_statement
 
     select_statement : fields_select_stmt
                      | accu_func_stmt
@@ -34,6 +36,9 @@ grammar:
 
     order_statement : ORDER BY order_factor
                     | order_statement, order_factor
+
+    limit_statement : LIMIT NUMBER
+                    | LIMIT NUMBER ',' NUMBER
 
     a_field : NAME
             | SIZE
@@ -132,12 +137,17 @@ def p_statement(p):
                   | SELECT select_statement where_statement
                   | SELECT select_statement from_statement
                   | SELECT from_statement where_statement
+                  | statement order_statement limit_statement
                   | SELECT where_statement
                   | SELECT select_statement
                   | SELECT from_statement
                   | statement order_statement
+                  | statement limit_statement
     '''
-    if not p[0]:
+    if isinstance(p[1], dict):
+        # statement : ^statement.*
+        p[0] = p[1]
+    else:
         p[0] = {}
 
     stmts = p[0]
@@ -149,24 +159,27 @@ def p_statement(p):
         if stmt_type == 'select':
             stmts['select'] = p[2][1]
             stmts[p[3][0]] = p[3][1]
-        else:
+        elif stmt_type == 'from':
             stmts['from'], stmts['where'] = p[2][1], p[3][1]
+        else:
+            # statement : statement order_statement limit_statement
+            stmts['order'], stmts['limit'] = p[2][1], p[3][1]
 
     elif len(p) == 3:
         stmt_type, stmt = p[2]
         if stmt_type == 'where' or stmt_type == 'select' or stmt_type == 'from':
             stmts[stmt_type] = stmt
-        else:
+        elif stmt_type == 'order':
             # statement : statement order_statement
-            stmt = p[1]
-            for k, v in stmt.items():
-                stmts[k] = v
 
             # check conflict between order by and aggregation function
             if 'select' in stmts and stmts['select'][0] == 'aggregate':
                 raise Exception('Confliction between order by and select aggregation function')
 
             stmts['order'] = p[2][1]
+        elif stmt_type == 'limit':
+            # statement : statement limit_statement
+            stmts['limit'] = p[2][1]
 
 
 def p_select_stmt(p):
@@ -418,6 +431,19 @@ def p_order_factor(p):
     '''
     # (field_name, asc/desc)
     p[0] = (p[1], p[2].lower() if len(p) == 3 else 'asc')
+
+
+def p_limit_statement(p):
+    '''
+        limit_statement : LIMIT NUMBER
+                        | LIMIT NUMBER ',' NUMBER
+    '''
+    if not p[0]:
+        p[0] = ('limit', [])
+
+    p[0][1].append(p[2])
+    if len(p) == 5:
+        p[0][1].append(p[4])
 
 
 def time_proc(p):

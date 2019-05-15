@@ -26,6 +26,7 @@ def execute(**kwargs):
     f_stmt = kwargs.get('from', '.')
     w_stmt = kwargs.get('where', lambda finfo: True)
     o_stmt = kwargs.get('order')
+    l_stmt = kwargs.get('limit')
 
     # remove type of select
     s_stmt = s_stmt[1]
@@ -53,6 +54,13 @@ def execute(**kwargs):
 
     if o_stmt:
         files.sort(_order_cmp(o_stmt))
+
+    if l_stmt:
+        if len(l_stmt) == 1:
+            files = files[0:l_stmt[0]]
+        else:
+            count, start = l_stmt
+            files = files[start: start + count]
 
     for f in files:
         printer.print_finfo(f['name'], f['stat'])
