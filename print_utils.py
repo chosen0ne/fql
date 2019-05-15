@@ -35,8 +35,10 @@ class FieldPrinter(object):
         self._fsep_line = self._get_sep_line(select_fields_info.values())
 
         # calculate each column width for accumulative functions
-        self._field_col = reduce(lambda x, y: x if x > y else y,
-                                 map(lambda x: len(x.desp()[1]), accufuncs), 0)
+        # min and max function whill show the file path, so increase the column length
+        acc_func_lens = map(lambda x: len(x.desp()[1]) + 20 if x.desp()[0] in ['min', 'max'] else 0,
+                            accufuncs)
+        self._field_col = reduce(lambda x, y: x if x > y else y, acc_func_lens, 0)
         self._field_col += 5 + 4
         self._val_col = reduce(lambda x, y: x if x > y else y,
                                fields_info.values(), 0)
