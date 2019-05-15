@@ -32,7 +32,6 @@ reserved = {
 
 tokens = [
     'QUOTE',
-    'DQUOTE',
     'LE',       # '<='
     'GE',       # '>='
     'NE',       # '!='
@@ -53,8 +52,7 @@ t_NOT = r'(not)|(NOT)'
 t_LE = r'<='
 t_GE = r'>='
 t_NE = r'!='
-t_QUOTE = r'\''
-t_DQUOTE = r'"'
+t_QUOTE = r'(\')|"'
 t_LIKE = r'(like)|(LIKE)'
 t_MAX = r'(max)|(MAX)'
 t_MIN = r'(min)|(MIN)'
@@ -111,7 +109,7 @@ def t_error(t):
 lexer = lex.lex()
 
 if __name__ == '__main__':
-    stmt = 'select * from . where $ctime < 2015-01-20 16:55:00'
+    stmt = 'select * from . where ctime < 2015-01-20 16:55:00 and name = \'test\''
     lexer.input(stmt)
     for t in lexer:
         print t

@@ -20,79 +20,110 @@ from print_utils import FieldPrinter
 
 '''
 grammar:
-    statement: SELECT select_statement from_statement where_statement
-             | SELECT select_statement where_statement
-             | SELECT where_statement
+    statement : SELECT select_statement from_statement where_statement
+              | SELECT select_statement where_statement
+              | SELECT select_statement from_statement
+              | SELECT where_statement
+              | SELECT select_statement
 
-    select_statement: select_statement, NAME
-                    | select_statement, SIZE
-                    | select_statement, CTIME
-                    | select_statement, MTIME
-                    | select_statement, ATIME
-                    | NAME
-                    | SIZE
-                    | CTIME
-                    | MTIME
-                    | ATIME
-                    | *
+    select_statement : fields_select_stmt
+                     | accu_func_stmt
 
-    from_statement: FROM FNAME
+    fields_select_stmt : fields_select_stmt ','  NAME
+                       | fields_select_stmt ','  SIZE
+                       | fields_select_stmt ','  CTIME
+                       | fields_select_stmt ','  MTIME
+                       | fields_select_stmt ','  ATIME
+                       | NAME
+                       | SIZE
+                       | CTIME
+                       | MTIME
+                       | ATIME
+                       | '*'
 
-    where_statement: WHERE condition_statement
+    accu_field : ATIME
+               | MTIME
+               | CTIME
+               | SIZE
 
-    condition_statement: condition_statement OR and_condition
-                       | and_condition
+    accu_func_stmt : AVG '(' accu_field ')'
+                   | MAX '(' accu_field ')'
+                   | MIN '(' accu_field ')'
+                   | COUNT '(' '*' ')'
+                   | accu_func_stmt ',' AVG '(' accu_field ')'
+                   | accu_func_stmt ',' MAX '(' accu_field ')'
+                   | accu_func_stmt ',' MIN '(' accu_field ')'
+                   | accu_func_stmt ',' COUNT '(' '*' ')'
+                   | accu_func_stmt ',' SUM '(' SIZE ')'
 
-    and_condition: and_condition AND factor
-                 | factor
+    from_statement : FROM FNAME
 
-    factor: name_factor
-          | size_factor
-          | ctime_factor
-          | mtime_factor
-          | atime_factor
+    where_statement : WHERE condition_statement
 
-    name_factor: NAME = FNAME
-               | NAME LIKE FNAME
+    condition_statement : condition_statement OR and_condition
+                        | and_condition
 
-    size_factor: SIZE = NUMBER
-               | SIZE > NUMBER
-               | SIZE < NUMBER
-               | SIZE >= NUMBER
-               | SIZE <= NUMBER
+    and_condition : and_condition AND factor
+                  | factor
 
-    ctime_factor: CTIME = DATE
-                | CTIME = DATETIME
-                | CTIME > DATE
-                | CTIME > DATETIME
-                | CTIME >= DATE
-                | CTIME >= DATETIME
-                | CTIME < DATE
-                | CTIME <= DATETIME
+    factor : name_factor
+           | size_factor
+           | ctime_factor
+           | mtime_factor
+           | atime_factor
+           | '(' condition_statement ')'
+           | NOT factor
 
-    mtime_factor: MTIME = DATE
-                | MTIME = DATETIME
-                | MTIME > DATE
-                | MTIME > DATETIME
-                | MTIME >= DATE
-                | MTIME >= DATETIME
-                | MTIME < DATE
-                | MTIME <= DATETIME
+    name_factor : NAME '=' QUOTE FNAME QUOTE
+                | NAME LIKE QUOTE FNAME QUOTE
 
-    Atime_factor: ATIME = DATE
-                | ATIME = DATETIME
-                | ATIME > DATE
-                | ATIME > DATETIME
-                | ATIME >= DATE
-                | ATIME >= DATETIME
-                | ATIME < DATE
-                | ATIME <= DATETIME
+    size_factor : SIZE '=' NUMBER
+                | SIZE '>' NUMBER
+                | SIZE '<' NUMBER
+                | SIZE NE NUMBER
+                | SIZE GE NUMBER
+                | SIZE LE NUMBER
+
+    datetime_factor : DATE
+                    | DATE TIME
+
+    ctime_factor : CTIME '=' datetime_factor
+                 | CTIME '>' datetime_factor
+                 | CTIME GE datetime_factor
+                 | CTIME '<' datetime_factor
+                 | CTIME LE datetime_factor
+                 | CTIME NE datetime_factor
+
+    mtime_factor : MTIME '=' datetime_factor
+                 | MTIME '>' datetime_factor
+                 | MTIME GE datetime_factor
+                 | MTIME '<' datetime_factor
+                 | MTIME LE datetime_factor
+                 | MTIME NE datetime_factor
+
+    atime_factor : ATIME '=' datetime_factor
+                 | ATIME '>' datetime_factor
+                 | ATIME GE datetime_factor
+                 | ATIME '<' datetime_factor
+                 | ATIME LE datetime_factor
+                 | ATIME NE datetime_factor
+
 '''
+
+# used to compare file stats, such as st_size, st_ctime, st_atime...
+cmp_operators = {
+        '=': lambda field, val: lambda finfo: getattr(finfo['stat'], field) == val,
+        '>': lambda field, val: lambda finfo: getattr(finfo['stat'], field) > val,
+        '<': lambda field, val: lambda finfo: getattr(finfo['stat'], field) < val,
+        '!=': lambda field, val: lambda finfo: getattr(finfo['stat'], field) != val,
+        '>=': lambda field, val: lambda finfo: getattr(finfo['stat'], field) >= val,
+        '<=': lambda field, val: lambda finfo: getattr(finfo['stat'], field) <= val
+}
 
 
 def execute(s_stmt, f_stmt, w_stmt):
     if not s_stmt:
-        s_stmt = ['$name']
+        s_stmt = ['*']
     if not f_stmt:
         f_stmt = '.'
     if not w_stmt:
@@ -144,24 +175,27 @@ def p_statement(p):
                   | SELECT select_statement where_statement
                   | SELECT select_statement from_statement
                   | SELECT where_statement
+                  | SELECT select_statement
     '''
     s_stmt, f_stmt, w_stmt = None, None, None
     if len(p) == 5:
-        s_stmt = p[2]
+        s_stmt = p[2][1]
         f_stmt = p[3][1]
         w_stmt = p[4][1]
     elif len(p) == 4:
         stmt_type, func = p[3]
         if stmt_type == 'from':
-            s_stmt, f_stmt = p[2], func
+            s_stmt, f_stmt = p[2][1], func
         elif stmt_type == 'where':
-            s_stmt, w_stmt = p[2], func
+            s_stmt, w_stmt = p[2][1], func
     elif len(p) == 3:
         stmt_type, func = p[2]
         if stmt_type == 'from':
             f_stmt = func
         elif stmt_type == 'where':
             w_stmt = func
+        elif stmt_type == 'select':
+            s_stmt = func
 
     execute(s_stmt, f_stmt, w_stmt)
 
@@ -171,7 +205,7 @@ def p_select_stmt(p):
         select_statement : fields_select_stmt
                          | accu_func_stmt
     '''
-    p[0] = p[1]
+    p[0] = ('select', p[1])
 
 
 def p_fields_select_stmt(p):
@@ -291,19 +325,16 @@ def p_factor(p):
         p1 = p[2]
         p[0] = lambda finfo: not p1(finfo)
     elif len(p) == 4:
-        p1 = p[2]
-        p[0] = p1
+        p[0] = p[2]
 
 
 def p_name_factor(p):
     '''
         name_factor : NAME '=' QUOTE FNAME QUOTE
                     | NAME LIKE QUOTE FNAME QUOTE
-                    | NAME '=' DQUOTE FNAME DQUOTE
-                    | NAME LIKE DQUOTE FNAME DQUOTE
     '''
-    fname = p[4]
-    if p[2] == '=':
+    _, _, op, _, fname, _ = p
+    if op == '=':
         p[0] = lambda finfo: finfo['name'] == fname
     else:
         fname = fname.replace('.', '\.')
@@ -321,100 +352,75 @@ def p_size_factor(p):
                     | SIZE GE NUMBER
                     | SIZE LE NUMBER
     '''
-    fsize = p[3]
-    if p[2] == '=':
-        p[0] = lambda finfo: finfo['stat'].st_size == fsize
-    elif p[2] == '>':
-        p[0] = lambda finfo: finfo['stat'].st_size > fsize
-    elif p[2] == '<':
-        p[0] = lambda finfo: finfo['stat'].st_size < fsize
-    elif p[2] == 'NE':
-        p[0] = lambda finfo: finfo['stat'].st_size != fsize
-    elif p[2] == 'GE':
-        p[0] = lambda finfo: finfo['stat'].st_size >= fsize
-    elif p[2] == 'LE':
-        p[0] = lambda finfo: finfo['stat'].st_size <= fsize
+    _, _, op, fsize = p
+    cmp_func = cmp_operators[op]
+    p[0] = cmp_func('st_size', fsize)
 
+
+def p_datetime_factor(p):
+    '''
+        datetime_factor : DATE
+                        | DATE TIME
+    '''
+    if len(p) == 2:
+        p[0] = datetime.strptime(p[1], '%Y-%m-%d')
+    else:
+        p[0] = datetime.strptime(p[1] + ' ' + p[2], '%Y-%m-%d %H:%M:%S')
 
 def p_ctime_factor(p):
     '''
-        ctime_factor : CTIME '=' DATE
-                     | CTIME '=' DATE TIME
-                     | CTIME '>' DATE
-                     | CTIME '>' DATE TIME
-                     | CTIME GE DATE
-                     | CTIME GE DATE TIME
-                     | CTIME '<' DATE
-                     | CTIME '<' DATE TIME
-                     | CTIME LE DATE
-                     | CTIME LE DATE TIME
-                     | CTIME NE DATE
-                     | CTIME NE DATE TIME
+        ctime_factor : CTIME '=' datetime_factor
+                     | CTIME '>' datetime_factor
+                     | CTIME GE datetime_factor
+                     | CTIME '<' datetime_factor
+                     | CTIME LE datetime_factor
+                     | CTIME NE datetime_factor
     '''
-    time_proc(p, 'st_ctime')
+    time_proc(p)
 
 
 def p_mtime_factor(p):
     '''
-        mtime_factor : MTIME '=' DATE
-                     | MTIME '=' DATE TIME
-                     | MTIME '>' DATE
-                     | MTIME '>' DATE TIME
-                     | MTIME GE DATE
-                     | MTIME GE DATE TIME
-                     | MTIME '<' DATE
-                     | MTIME '<' DATE TIME
-                     | MTIME LE DATE
-                     | MTIME LE DATE TIME
-                     | MTIME NE DATE
-                     | MTIME NE DATE TIME
+        mtime_factor : MTIME '=' datetime_factor
+                     | MTIME '>' datetime_factor
+                     | MTIME GE datetime_factor
+                     | MTIME '<' datetime_factor
+                     | MTIME LE datetime_factor
+                     | MTIME NE datetime_factor
     '''
-    time_proc(p, 'st_mtime')
+    time_proc(p)
 
 
 def p_atime_factor(p):
     '''
-        atime_factor : ATIME '=' DATE
-                     | ATIME '=' DATE TIME
-                     | ATIME '>' DATE
-                     | ATIME '>' DATE TIME
-                     | ATIME GE DATE
-                     | ATIME GE DATE TIME
-                     | ATIME '<' DATE
-                     | ATIME '<' DATE TIME
-                     | ATIME LE DATE
-                     | ATIME LE DATE TIME
-                     | ATIME NE DATE
-                     | ATIME NE DATE TIME
+        atime_factor : ATIME '=' datetime_factor
+                     | ATIME '>' datetime_factor
+                     | ATIME GE datetime_factor
+                     | ATIME '<' datetime_factor
+                     | ATIME LE datetime_factor
+                     | ATIME NE datetime_factor
     '''
-    time_proc(p, 'st_atime')
+    time_proc(p)
 
 
-def time_proc(p, fname):
-    if len(p) == 4:
-        d = datetime.strptime(p[3], '%Y-%m-%d')
-    else:
-        d = datetime.strptime(p[3] + ' ' + p[4], '%Y-%m-%d %H:%M:%S')
+def time_proc(p):
+    _, field_name, op, d = p
     d = time.mktime(d.timetuple())
+    field_name = 'st_' + field_name.lower()
 
-    if p[2] == '=':
-        p[0] = lambda finfo: getattr(finfo['stat'], fname) == d
-    elif p[2] == '<':
-        p[0] = lambda finfo: getattr(finfo['stat'], fname) < d
-    elif p[2] == '<=':
-        p[0] = lambda finfo: getattr(finfo['stat'], fname) <= d
-    elif p[2] == '>':
-        p[0] = lambda finfo: getattr(finfo['stat'], fname) > d
-    elif p[2] == '>=':
-        p[0] = lambda finfo: getattr(finfo['stat'], fname) >= d
-    elif p[2] == '!=':
-        p[0] = lambda finfo: getattr(finfo['stat'], fname) != d
+    cmp_func = cmp_operators[op]
+    p[0] = cmp_func(field_name, d)
 
 
 def p_error(p):
+    if not p:
+        print 'End of file'
+        return
     print 'parse error, unexpected token:', p.type
 
+
 yacc.yacc()
+
 
 if __name__ == '__main__':
     yacc.yacc()
