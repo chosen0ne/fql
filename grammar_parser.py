@@ -42,6 +42,10 @@ grammar:
                        | ATIME
                        | '*'
 
+    from_statement : FROM FNAME
+
+    where_statement : WHERE condition_statement
+
     accu_field : ATIME
                | MTIME
                | CTIME
@@ -56,10 +60,6 @@ grammar:
                    | accu_func_stmt ',' MIN '(' accu_field ')'
                    | accu_func_stmt ',' COUNT '(' '*' ')'
                    | accu_func_stmt ',' SUM '(' SIZE ')'
-
-    from_statement : FROM FNAME
-
-    where_statement : WHERE condition_statement
 
     condition_statement : condition_statement OR and_condition
                         | and_condition
