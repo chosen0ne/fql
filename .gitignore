@@ -1,4 +1,5 @@
 *.pyc
+*.sw?
 
 parser.out
 parsetab.py
