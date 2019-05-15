@@ -163,7 +163,7 @@ def p_statement(p):
                 stmts[k] = v
 
             # check conflict between order by and aggregation function
-            if stmts['select'][0] == 'aggregate':
+            if 'select' in stmts and stmts['select'][0] == 'aggregate':
                 raise Exception('Confliction between order by and select aggregation function')
 
             stmts['order'] = p[2][1]
@@ -175,6 +175,12 @@ def p_select_stmt(p):
                          | accu_func_stmt
     '''
     # format of p[0]: ('select', ('field', [])) or ('select', ('accu', []))
+    if p[1][0] == 'aggregate':
+        # format of p[1]:
+        #   ('aggregate', OrderedDict([(max_st_size, MaxAccFuncCls), (min_st_ctime, MinAccFuncCls)])
+        #       transmit to
+        #   ('aggregate', [MaxAccFuncCls, MinAccFuncCls])
+        p[1] = ('aggregate', [v for _, v in p[1][1].items()])
     p[0] = ('select', p[1])
 
 
@@ -184,12 +190,14 @@ def p_fields_select_stmt(p):
                            | a_field
                            | '*'
     '''
-    if not p[0]:
+    if isinstance(p[1], tuple):
+        # fields_select_stmt : fields_select_stmt ',' a_field
+        p[0] = p[1]
+    else:
         p[0] = ('field', [])
 
     fields = p[0][1]
     if len(p) == 4:
-        fields.extend(p[1])
         fields.append(p[3])
     elif len(p) == 2:
         fields.append(p[1])
@@ -228,7 +236,9 @@ def p_accu_func_stmt1(p):
     op = p[1]
     accu_obj_name = op[0].upper() + op[1:].lower() + 'FuncCls'
     accu_obj = accu_func.__dict__[accu_obj_name]
-    p[0] = ('aggregate', [accu_obj(f)])
+    func_key = '%s(%s)' % (op, p[3])
+    fns = OrderedDict([(func_key.lower(), accu_obj(f))])
+    p[0] = ('aggregate', fns)
 
 
 def p_accu_func_stmt2(p):
@@ -239,16 +249,20 @@ def p_accu_func_stmt2(p):
                        | accu_func_stmt ',' COUNT '(' '*' ')'
                        | accu_func_stmt ',' SUM '(' SIZE ')'
     '''
-    if not p[0]:
-        p[0] = []
 
+    p[0] = p[1]
+
+    fns = p[0][1]
     f = 'st_' + p[5].lower()
     op = p[3]
     accu_obj_name = op[0].upper() + op[1:].lower() + 'FuncCls'
     accu_obj = accu_func.__dict__[accu_obj_name]
 
-    p[0].extend(p[1])
-    p[0].append(accu_obj(f))
+    func_key = '%s(%s)' % (op, p[5])
+    if func_key in fns:
+        raise Exception('Duplicated aggregation function, func: %s', func_key)
+
+    fns[func_key] = accu_obj(f)
 
 
 def p_from_stmt(p):
@@ -383,7 +397,9 @@ def p_order_statement(p):
                         | order_statement ',' order_factor
     '''
     # list of tuple(field, asc/desc)
-    if not p[0]:
+    if isinstance(p[1], tuple):
+        p[0] = p[1]
+    else:
         p[0] = ('order', OrderedDict())
 
     orders = p[0][1]
@@ -392,13 +408,6 @@ def p_order_statement(p):
     if field in orders:
         raise Exception('Duplicated field of ORDER BY, field: %s' % field)
     orders[field] = ad
-
-    if type(p[1]) is tuple:
-        # order_statement ',' order_factor
-        for k, v in p[1][1].items():
-            if k in orders:
-                raise Exception('Duplicated field of ORDER BY, field: %s' % k)
-            orders[k] = v
 
 
 def p_order_factor(p):
