@@ -13,6 +13,10 @@ reserved = {
     'from': 'FROM',
     'where': 'WHERE',
     'and': 'AND',
+    'order': 'ORDER',
+    'by': 'BY',
+    'asc': 'ASC',
+    'desc': 'DESC',
     'or': 'OR',
     'not': 'NOT',
     'like': 'LIKE',
@@ -47,6 +51,10 @@ t_SELECT = r'(select)|(SELECT)'
 t_FROM = r'(from)|(FROM)'
 t_WHERE = r'(where)|(WHERE)'
 t_AND = r'(and)|(AND)'
+t_ORDER = r'(order)|(ORDER)'
+t_BY = r'(by)|(BY)'
+t_ASC = r'(asc)|(ASC)'
+t_DESC = r'(desc)|(DESC)'
 t_OR = r'(or)|(OR)'
 t_NOT = r'(not)|(NOT)'
 t_LE = r'<='
@@ -109,7 +117,7 @@ def t_error(t):
 lexer = lex.lex()
 
 if __name__ == '__main__':
-    stmt = 'select * from . where ctime < 2015-01-20 16:55:00 and name = \'test\''
+    stmt = 'select * from . where ctime < 2015-01-20 16:55:00 and name = \'test\' order by name asc'
     lexer.input(stmt)
     for t in lexer:
         print t

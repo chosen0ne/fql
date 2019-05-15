@@ -9,7 +9,7 @@
 import cmd
 import sys
 from optparse import OptionParser
-from grammar_parser import yacc
+from executor import execute_statement
 
 _fql_version = '0.1.0'
 
@@ -23,7 +23,7 @@ class FqlCmd(cmd.Cmd):
         '''
         use fql to query file infos
         '''
-        yacc.parse('select ' + arg)
+        execute_statement('select ' + arg)
 
     def do_exit(self, arg):
         '''
@@ -63,7 +63,7 @@ if __name__ == '__main__':
         sys.exit()
 
     if args:
-        yacc.parse(' '.join(args))
+        execute_statement(' '.join(args))
         sys.exit()
 
     c = FqlCmd()

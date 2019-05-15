@@ -8,24 +8,22 @@
 
 import re
 import time
-import os.path
-import glob
-import os
 import accu_func
 from datetime import datetime
 from collections import OrderedDict
 from ply import yacc
 from lex_parser import *
-from print_utils import FieldPrinter
 
 '''
 grammar:
     statement : SELECT select_statement from_statement where_statement
               | SELECT select_statement where_statement
               | SELECT select_statement from_statement
+              | SELECT from_statement where_statement
               | SELECT where_statement
               | SELECT select_statement
               | SELECT from_statement
+              | statement order_statement
 
     select_statement : fields_select_stmt
                      | accu_func_stmt
@@ -37,6 +35,9 @@ grammar:
     from_statement : FROM FNAME
 
     where_statement : WHERE condition_statement
+
+    order_statement : ORDER BY order_factor
+                    | order_statement, order_factor
 
     a_field : NAME
             | SIZE
@@ -108,6 +109,10 @@ grammar:
                  | ATIME LE datetime_factor
                  | ATIME NE datetime_factor
 
+    order_factor : a_field
+                 | a_field ASC
+                 | a_field DESC
+
 '''
 
 # used to compare file stats, such as st_size, st_ctime, st_atime...
@@ -121,84 +126,42 @@ cmp_operators = {
 }
 
 
-def execute(s_stmt, f_stmt, w_stmt):
-    if not s_stmt:
-        s_stmt = ['*']
-    if not f_stmt:
-        f_stmt = '.'
-    if not w_stmt:
-        w_stmt = lambda finfo: True
-
-    show_fields = OrderedDict()
-    accu_funcs = OrderedDict()
-    for s in s_stmt:
-        if isinstance(s, accu_func.AccuFuncCls):
-            accu_funcs['_'.join(s.desp())] = s
-        else:
-            show_fields[s] = 1
-
-    accu_funcs = accu_funcs.values()
-    if '*' in show_fields:
-        show_fields = ['*']
-    else:
-        show_fields = show_fields.keys()
-
-    # print table, info for echo row
-    printer = FieldPrinter(f_stmt, show_fields, accu_funcs)
-    printer.print_title()
-
-    travel_file_tree(f_stmt, accu_funcs, w_stmt, printer)
-
-    # print accumulative func
-    printer.print_accu_funcs()
-
-
-def travel_file_tree(start_point, accu_funcs, selector, printer):
-    g = glob.glob(start_point + '/*')
-    for f in g:
-        statinfo = os.stat(f)
-        fname = os.path.basename(f)
-        finfo = {'name': fname, 'stat': statinfo}
-        if selector(finfo):
-            printer.print_finfo(fname, statinfo)
-
-            for accufunc in accu_funcs:
-                accufunc(finfo, fname)
-
-        if os.path.isdir(f):
-            travel_file_tree(f, accu_funcs, selector, printer)
-
-
 def p_statement(p):
     '''
         statement : SELECT select_statement from_statement where_statement
                   | SELECT select_statement where_statement
                   | SELECT select_statement from_statement
+                  | SELECT from_statement where_statement
                   | SELECT where_statement
                   | SELECT select_statement
                   | SELECT from_statement
+                  | statement order_statement
     '''
-    s_stmt, f_stmt, w_stmt = None, None, None
-    if len(p) == 5:
-        s_stmt = p[2][1]
-        f_stmt = p[3][1]
-        w_stmt = p[4][1]
-    elif len(p) == 4:
-        stmt_type, func = p[3]
-        if stmt_type == 'from':
-            s_stmt, f_stmt = p[2][1], func
-        elif stmt_type == 'where':
-            s_stmt, w_stmt = p[2][1], func
-    elif len(p) == 3:
-        stmt_type, func = p[2]
-        if stmt_type == 'from':
-            f_stmt = func
-        elif stmt_type == 'where':
-            w_stmt = func
-        elif stmt_type == 'select':
-            s_stmt = func
+    if not p[0]:
+        p[0] = {}
 
-    execute(s_stmt, f_stmt, w_stmt)
+    stmts = p[0]
+    if len(p) == 5:
+        stmts['select'], stmts['from'], stmts['where'] = p[2][1], p[3][1], p[4][1]
+
+    elif len(p) == 4:
+        stmt_type, stmt = p[2]
+        if stmt_type == 'select':
+            stmts['select'] = p[2][1]
+            stmts[p[3][0]] = p[3][1]
+        else:
+            stmts['from'], stmts['where'] = p[2][1], p[3][1]
+
+    elif len(p) == 3:
+        stmt_type, stmt = p[2]
+        if stmt_type == 'where' or stmt_type == 'select' or stmt_type == 'from':
+            stmts[stmt_type] = stmt
+        else:
+            # statement : statement order_statement
+            stmt = p[1]
+            for k, v in stmt.items():
+                stmts[k] = v
+            stmts['order'] = p[2][1]
 
 
 def p_select_stmt(p):
@@ -233,7 +196,7 @@ def p_a_field(p):
                 | MTIME
                 | ATIME
     '''
-    p[0] = p[1]
+    p[0] = p[1].lower()
 
 
 def p_accu_field(p):
@@ -407,6 +370,40 @@ def p_atime_factor(p):
     time_proc(p)
 
 
+def p_order_statement(p):
+    '''
+        order_statement : ORDER BY order_factor
+                        | order_statement ',' order_factor
+    '''
+    # list of tuple(field, asc/desc)
+    if not p[0]:
+        p[0] = ('order', OrderedDict())
+
+    orders = p[0][1]
+
+    field, ad = p[3]
+    if field in orders:
+        raise Exception('Duplicated field of ORDER BY, field: %s' % field)
+    orders[field] = ad
+
+    if type(p[1]) is tuple:
+        # order_statement ',' order_factor
+        for k, v in p[1][1].items():
+            if k in orders:
+                raise Exception('Duplicated field of ORDER BY, field: %s' % k)
+            orders[k] = v
+
+
+def p_order_factor(p):
+    '''
+        order_factor : a_field
+                     | a_field ASC
+                     | a_field DESC
+    '''
+    # (field_name, asc/desc)
+    p[0] = (p[1], p[2].lower() if len(p) == 3 else 'asc')
+
+
 def time_proc(p):
     _, field_name, op, d = p
     d = time.mktime(d.timetuple())
@@ -423,10 +420,10 @@ def p_error(p):
     print 'parse error, unexpected token:', p.type
 
 
-yacc.yacc()
+parser = yacc.yacc()
 
 
 if __name__ == '__main__':
     yacc.yacc()
-    stmt = 'select $name, avg($size) from . where $size > 1'
-    yacc.parse(stmt)
+    stmt = 'select name from . where size > 1 order by name'
+    print parser.parse(stmt)
