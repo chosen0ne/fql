@@ -22,10 +22,13 @@ def execute_statement(stmt):
 
 # def execute(s_stmt, f_stmt, w_stmt):
 def execute(**kwargs):
-    s_stmt = kwargs.get('select', ['*'])
+    s_stmt = kwargs.get('select', ('', ['*']))
     f_stmt = kwargs.get('from', '.')
     w_stmt = kwargs.get('where', lambda finfo: True)
     o_stmt = kwargs.get('order')
+
+    # remove type of select
+    s_stmt = s_stmt[1]
 
     show_fields = OrderedDict()
     accu_funcs = OrderedDict()

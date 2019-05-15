@@ -28,10 +28,6 @@ grammar:
     select_statement : fields_select_stmt
                      | accu_func_stmt
 
-    fields_select_stmt : fields_select_stmt ','  a_field
-                       | a_field
-                       | '*'
-
     from_statement : FROM FNAME
 
     where_statement : WHERE condition_statement
@@ -49,6 +45,10 @@ grammar:
                | MTIME
                | CTIME
                | SIZE
+
+    fields_select_stmt : fields_select_stmt ','  a_field
+                       | a_field
+                       | '*'
 
     accu_func_stmt : AVG '(' accu_field ')'
                    | MAX '(' accu_field ')'
@@ -161,6 +161,11 @@ def p_statement(p):
             stmt = p[1]
             for k, v in stmt.items():
                 stmts[k] = v
+
+            # check conflict between order by and aggregation function
+            if stmts['select'][0] == 'aggregate':
+                raise Exception('Confliction between order by and select aggregation function')
+
             stmts['order'] = p[2][1]
 
 
@@ -169,6 +174,7 @@ def p_select_stmt(p):
         select_statement : fields_select_stmt
                          | accu_func_stmt
     '''
+    # format of p[0]: ('select', ('field', [])) or ('select', ('accu', []))
     p[0] = ('select', p[1])
 
 
@@ -179,13 +185,14 @@ def p_fields_select_stmt(p):
                            | '*'
     '''
     if not p[0]:
-        p[0] = []
+        p[0] = ('field', [])
 
+    fields = p[0][1]
     if len(p) == 4:
-        p[0].extend(p[1])
-        p[0].append(p[3])
+        fields.extend(p[1])
+        fields.append(p[3])
     elif len(p) == 2:
-        p[0].append(p[1])
+        fields.append(p[1])
 
 
 def p_a_field(p):
@@ -221,7 +228,7 @@ def p_accu_func_stmt1(p):
     op = p[1]
     accu_obj_name = op[0].upper() + op[1:].lower() + 'FuncCls'
     accu_obj = accu_func.__dict__[accu_obj_name]
-    p[0] = [accu_obj(f)]
+    p[0] = ('aggregate', [accu_obj(f)])
 
 
 def p_accu_func_stmt2(p):
