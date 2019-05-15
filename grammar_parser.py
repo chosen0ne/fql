@@ -30,21 +30,19 @@ grammar:
     select_statement : fields_select_stmt
                      | accu_func_stmt
 
-    fields_select_stmt : fields_select_stmt ','  NAME
-                       | fields_select_stmt ','  SIZE
-                       | fields_select_stmt ','  CTIME
-                       | fields_select_stmt ','  MTIME
-                       | fields_select_stmt ','  ATIME
-                       | NAME
-                       | SIZE
-                       | CTIME
-                       | MTIME
-                       | ATIME
+    fields_select_stmt : fields_select_stmt ','  a_field
+                       | a_field
                        | '*'
 
     from_statement : FROM FNAME
 
     where_statement : WHERE condition_statement
+
+    a_field : NAME
+            | SIZE
+            | CTIME
+            | MTIME
+            | ATIME
 
     accu_field : ATIME
                | MTIME
@@ -55,6 +53,7 @@ grammar:
                    | MAX '(' accu_field ')'
                    | MIN '(' accu_field ')'
                    | COUNT '(' '*' ')'
+                   | SUM '(' '*' ')'
                    | accu_func_stmt ',' AVG '(' accu_field ')'
                    | accu_func_stmt ',' MAX '(' accu_field ')'
                    | accu_func_stmt ',' MIN '(' accu_field ')'
@@ -212,16 +211,8 @@ def p_select_stmt(p):
 
 def p_fields_select_stmt(p):
     '''
-        fields_select_stmt : fields_select_stmt ','  NAME
-                           | fields_select_stmt ','  SIZE
-                           | fields_select_stmt ','  CTIME
-                           | fields_select_stmt ','  MTIME
-                           | fields_select_stmt ','  ATIME
-                           | NAME
-                           | SIZE
-                           | CTIME
-                           | MTIME
-                           | ATIME
+        fields_select_stmt : fields_select_stmt ','  a_field
+                           | a_field
                            | '*'
     '''
     if not p[0]:
@@ -232,6 +223,17 @@ def p_fields_select_stmt(p):
         p[0].append(p[3])
     elif len(p) == 2:
         p[0].append(p[1])
+
+
+def p_a_field(p):
+    '''
+        a_field : NAME
+                | SIZE
+                | CTIME
+                | MTIME
+                | ATIME
+    '''
+    p[0] = p[1]
 
 
 def p_accu_field(p):
