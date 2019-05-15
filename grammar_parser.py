@@ -25,6 +25,7 @@ grammar:
               | SELECT select_statement from_statement
               | SELECT where_statement
               | SELECT select_statement
+              | SELECT from_statement
 
     select_statement : fields_select_stmt
                      | accu_func_stmt
@@ -176,6 +177,7 @@ def p_statement(p):
                   | SELECT select_statement from_statement
                   | SELECT where_statement
                   | SELECT select_statement
+                  | SELECT from_statement
     '''
     s_stmt, f_stmt, w_stmt = None, None, None
     if len(p) == 5:
