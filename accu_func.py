@@ -24,7 +24,8 @@ class AccuFuncCls(object):
     def val(self):
         pass
 
-    def __call__(self, finfo, fname):
+    # finfo: dict{'name', 'stat'}
+    def __call__(self, finfo):
         pass
 
     def desp(self):
@@ -35,13 +36,16 @@ class AccuFuncCls(object):
             return self._fname
         return None
 
+    def key(self):
+        return "%s(%s)" % self.desp()
+
 
 class CountFuncCls(AccuFuncCls):
     def __init__(self, field):
         self._count = 0
         self._field = field
 
-    def __call__(self, finfo, fname):
+    def __call__(self, finfo):
         self._count += 1
 
     def val(self):
@@ -56,7 +60,7 @@ class SumFuncCls(AccuFuncCls):
         self._total = 0
         self._field = field
 
-    def __call__(self, finfo, fname):
+    def __call__(self, finfo):
         self._total += getattr(finfo['stat'], self._field)
 
     def val(self):
@@ -72,11 +76,11 @@ class MaxFuncCls(AccuFuncCls):
         self._field = field
         self._fname = None
 
-    def __call__(self, finfo, fname):
+    def __call__(self, finfo):
         v = getattr(finfo['stat'], self._field)
         if v > self._max:
             self._max = v
-            self._fname = fname
+            self._fname = finfo['name']
 
     def val(self):
         return datetime_val(self._field, self._max)
@@ -91,11 +95,11 @@ class MinFuncCls(AccuFuncCls):
         self._field = field
         self._fname = None
 
-    def __call__(self, finfo, fname):
+    def __call__(self, finfo):
         v = getattr(finfo['stat'], self._field)
         if v < self._min:
             self._min = v
-            self._fname = fname
+            self._fname = finfo['name']
 
     def val(self):
         return datetime_val(self._field, self._min)
@@ -110,7 +114,7 @@ class AvgFuncCls(AccuFuncCls):
         self._total = 0
         self._field = field
 
-    def __call__(self, finfo, fname):
+    def __call__(self, finfo):
         self._total += getattr(finfo['stat'], self._field)
         self._count += 1
 

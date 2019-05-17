@@ -13,44 +13,81 @@ import accu_func
 from collections import OrderedDict
 from print_utils import FieldPrinter
 from grammar_parser import parser
+from groupby import GroupBy
+
+
+func_type = type(lambda a: 0)
+MODE_SELECT_FIELDS = 1
+MODE_SELECT_AGGR = 2
+MODE_GROUP_AGGR = 3
 
 
 def execute_statement(stmt):
     stmts = parser.parse(stmt)
     execute(**stmts)
 
-
-# def execute(s_stmt, f_stmt, w_stmt):
+# key word parameters:
+#   - select(dict{str -> object}): select the fields to be return
+#       - 'field' -> list of str: fields will be selected
+#       - 'aggregate' -> OrderedDict{str -> AccuFuncCls func()}
+#           - aggregation name on field -> aggregation function creator
+#               - max(size) -> lambda
+#       - 'dimension_aggr' -> OrderedDict{str -> str func(finfo{'name', 'stat'})}
+#           - dimension aggregation name on field -> dimension fetch function
+#               - minute(atime) -> lambda / ftype -> lambda
+#   - from(str): directory to be query
+#   - where(boolean func(finfo{'name', 'stat'})): filter files base on name or file stats
+#   - order(OrderedDict{str -> str}): sort the result
+#       - field name -> 'asc' or 'desc'
+#   - limit(list of int): limit the count of result
+#       - [limit]
+#       - [limit, start]
+#   - group(dict{str -> OrderedDict}): group result by some dimensions
+#       - 'dimension_aggr' -> OrderedDict{str -> str func(finfo{'name', 'stat'})}
+#           - minute(atime) -> lambda / ftype -> lambda
+#       - 'having' -> dict{str -> object}
+#           - aggregations -> OrderedDict{str -> str func(finfo{'name', 'stat'})}
+#               - having on the aggregation function on fields
+#           - fn -> boolean func(dict{str -> val})
+#               - str -> val => aggregation function on field -> number
+#                   - max(size) -> 100
 def execute(**kwargs):
     s_stmt = kwargs.get('select', ('select', ['*']))
     f_stmt = kwargs.get('from', '.')
     w_stmt = kwargs.get('where', lambda finfo: True)
     o_stmt = kwargs.get('order')
     l_stmt = kwargs.get('limit')
+    g_stmt = kwargs.get('group')
 
-    # remove type of select
-    s_stmt = s_stmt[1]
+    show_fields = set([f for f in s_stmt['field']]) if 'field' in s_stmt else {}
+    accu_funcs = s_stmt['aggregate'] if 'aggregate' in s_stmt else {}
+    dim_fields = '&'.join([k for k in s_stmt['dimension_aggr'].keys()]) \
+            if 'dimension_aggr' in s_stmt else None
 
-    show_fields = OrderedDict()
-    accu_funcs = OrderedDict()
-    for s in s_stmt:
-        if isinstance(s, accu_func.AccuFuncCls):
-            accu_funcs['_'.join(s.desp())] = s
-        else:
-            show_fields[s] = 1
-
-    accu_funcs = accu_funcs.values()
-    if '*' in show_fields:
-        show_fields = ['*']
+    if show_fields:
+        query_mode = MODE_SELECT_FIELDS
+    else if not g_stmt:
+        query_mode = MODE_SELECT_AGGR
     else:
-        show_fields = show_fields.keys()
+        query_mode = MODE_GROUP_AGGR
+
+    # use GroupBy to process group by aggragation or normal aggragation.
+    # When normal aggragation is executed, all the files is treated as in one group '*'
+    if query_mode == MODE_GROUP_AGGR:
+        # no group by, all the files are in one group
+        g_stmt = {'dimension_aggr': OrderedDict({'*': lambda a: '*'})}
+
+    g_stmt['accu_funcs'] = accu_funcs
+
+    groupby = GroupBy(**g_stmt)
 
     # print table, info for echo row
-    printer = FieldPrinter(f_stmt, show_fields, accu_funcs)
+    printer = FieldPrinter(f_stmt, show_fields, dim_fields, groupby)
     printer.print_title()
 
+    # all the files matched to where condition
     files = []
-    travel_file_tree(f_stmt, accu_funcs, w_stmt, printer, files)
+    travel_file_tree(f_stmt, w_stmt, printer, files, groupby)
 
     if o_stmt:
         files.sort(_order_cmp(o_stmt))
@@ -68,8 +105,13 @@ def execute(**kwargs):
     # print accumulative func
     printer.print_accu_funcs()
 
+    printer.print_group_by()
 
-def travel_file_tree(start_point, accu_funcs, selector, printer, files):
+# @param start_point(str)
+# @param selector(func: boolean selector(finfo))
+# @param printer(FieldPrinter)
+# @param files(list of finfo{'name', 'stat'})
+def travel_file_tree(start_point, selector, printer, files, groupby=None):
     g = glob.glob(start_point + '/*')
     for f in g:
         statinfo = os.stat(f)
@@ -78,11 +120,10 @@ def travel_file_tree(start_point, accu_funcs, selector, printer, files):
         if selector(finfo):
             files.append(finfo)
 
-            for accufunc in accu_funcs:
-                accufunc(finfo, fname)
+            groupby(finfo)
 
         if os.path.isdir(f):
-            travel_file_tree(f, accu_funcs, selector, printer, files)
+            travel_file_tree(f, selector, printer, files, groupby)
 
 
 def _order_cmp(order_keys):

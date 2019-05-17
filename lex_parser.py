@@ -18,6 +18,8 @@ reserved = {
     'asc': 'ASC',
     'desc': 'DESC',
     'limit': 'LIMIT',
+    'group': 'GROUP',
+    'having': 'HAVING',
     'or': 'OR',
     'not': 'NOT',
     'like': 'LIKE',
@@ -32,7 +34,15 @@ reserved = {
     'size': 'SIZE',
     'ctime': 'CTIME',
     'mtime': 'MTIME',
-    'atime': 'ATIME'
+    'atime': 'ATIME',
+    'ftype': 'FTYPE',
+    # group by func
+    'minute': 'MINUTE',
+    'hour': 'HOUR',
+    'day': 'DAY',
+    'week': 'WEEK',
+    'month': 'MONTH',
+    'year': 'YEAR'
 }
 
 tokens = [
@@ -57,6 +67,8 @@ t_BY = r'(by)|(BY)'
 t_ASC = r'(asc)|(ASC)'
 t_DESC = r'(desc)|(DESC)'
 t_LIMIT = r'(limit)|(LIMIT)'
+t_GROUP = r'(group)|(GROUP)'
+t_HAVING = r'(having)|(HAVING)'
 t_OR = r'(or)|(OR)'
 t_NOT = r'(not)|(NOT)'
 t_LE = r'<='
@@ -74,6 +86,13 @@ t_SIZE = r'(\size)|(\SIZE)'
 t_CTIME = r'(\ctime)|(\CTIME)'
 t_MTIME = r'(\mtime)|(\MTIME)'
 t_ATIME = r'(\atime)|(\ATIME)'
+t_FTYPE = r'(ftype)|(FTYPE)'
+t_MINUTE = r'(minute)|(MINUTE)'
+t_HOUR = r'(hour)|(HOUR)'
+t_DAY = r'(day)|(DAY)'
+t_WEEK = r'(week)|(WEEK)'
+t_MONTH = r'(month)|(MONTH)'
+t_YEAR = r'(year)|(YEAR)'
 t_ignore = ' \t\n'
 
 

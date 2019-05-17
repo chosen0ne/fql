@@ -15,20 +15,28 @@ from ply import yacc
 from lex_parser import *
 
 '''
+group query:
+    select minute(ctime), sum(size) from . where atime > 2019-05-15 group by minute(ctime) having count(*) > 2
+    select ftype, sum(size) from . where atime > 2019-05-15 group by ftype having count(*) > 2
+'''
+
+'''
 grammar:
     statement : SELECT select_statement from_statement where_statement
               | SELECT select_statement where_statement
               | SELECT select_statement from_statement
               | SELECT from_statement where_statement
-              | statement order_statement limit_statement
               | SELECT where_statement
               | SELECT select_statement
               | SELECT from_statement
               | statement order_statement
               | statement limit_statement
+              | statement group_by_statement
 
     select_statement : fields_select_stmt
                      | accu_func_stmt
+                     | accu_func_stmt ',' group_func_factor
+                     | group_func_factor ',' accu_func_stmt
 
     from_statement : FROM FNAME
 
@@ -118,10 +126,48 @@ grammar:
                  | a_field ASC
                  | a_field DESC
 
+    time_factor : ATIME
+                | CTIME
+                | MTIME
+
+    group_func_factor : MINUTE '(' time_factor ')'
+                      | HOUR '(' time_factor ')'
+                      | DATE '(' time_factor ')'
+                      | WEEK '(' time_factor ')'
+                      | MONTH '(' time_factor ')'
+                      | YEAR '(' time_factor ')'
+
+    having_statement : HAVING having_condition
+
+    having_condition : having_condition OR having_and_factor
+                     | having_and_factor
+
+    having_and_factor : having_and_factor AND having_factor
+                      | having_factor
+
+    having_factor : accu_func_stmt '=' NUMBER
+                  | accu_func_stmt NE NUMBER
+                  | accu_func_stmt '>' NUMBER
+                  | accu_func_stmt GE NUMBER
+                  | accu_func_stmt '<' NUMBER
+                  | accu_func_stmt LE NUMBER
+                  | '(' having_condition ')'
+                  | NOT having_factor
+
+    group_by_statement : GROUP BY FTYPE
+                       | GROUP BY group_func_factor
+                       | GROUP BY FTYPE having_statement
+                       | GROUP BY group_func_factor having_statement
+
 '''
 
+precedence = (
+        ('left', 'NUMBER'),
+        ('left', ',')
+)
+
 # used to compare file stats, such as st_size, st_ctime, st_atime...
-cmp_operators = {
+fstat_cmp_operators = {
         '=': lambda field, val: lambda finfo: getattr(finfo['stat'], field) == val,
         '>': lambda field, val: lambda finfo: getattr(finfo['stat'], field) > val,
         '<': lambda field, val: lambda finfo: getattr(finfo['stat'], field) < val,
@@ -131,18 +177,38 @@ cmp_operators = {
 }
 
 
+time_aggregate_operators = {
+        'minute': lambda field: lambda finfo: datetime.fromtimestamp(getattr(finfo['stat'], field))
+                .strftime('%Y-%m-%d %H:%M'),
+        'hour': lambda field: lambda finfo: datetime.fromtimestamp(getattr(finfo['stat'], field))
+                .strftime('%Y-%m-%d %H'),
+        'day': lambda field: lambda finfo: datetime.fromtimestamp(getattr(finfo['stat'], field))
+                .strftime('%Y-%m-%d'),
+        'month': lambda field: lambda finfo: datetime.fromtimestamp(getattr(finfo['stat'], field))
+                .strftime('%Y-%m'),
+        'year': lambda field: lambda finfo: datetime.fromtimestamp(getattr(finfo['stat'], field))
+                .strftime('%Y'),
+}
+
+
+# fetch file type '.*$'
+def ftype_aggregate_operator(finfo):
+    idx = finfo['name'].rfind('.')
+    return finfo['name'][idx:] if idx != -1 else '$'
+
+
 def p_statement(p):
     '''
         statement : SELECT select_statement from_statement where_statement
                   | SELECT select_statement where_statement
                   | SELECT select_statement from_statement
                   | SELECT from_statement where_statement
-                  | statement order_statement limit_statement
                   | SELECT where_statement
                   | SELECT select_statement
                   | SELECT from_statement
                   | statement order_statement
                   | statement limit_statement
+                  | statement group_by_statement
     '''
     if isinstance(p[1], dict):
         # statement : ^statement.*
@@ -161,9 +227,6 @@ def p_statement(p):
             stmts[p[3][0]] = p[3][1]
         elif stmt_type == 'from':
             stmts['from'], stmts['where'] = p[2][1], p[3][1]
-        else:
-            # statement : statement order_statement limit_statement
-            stmts['order'], stmts['limit'] = p[2][1], p[3][1]
 
     elif len(p) == 3:
         stmt_type, stmt = p[2]
@@ -171,30 +234,67 @@ def p_statement(p):
             stmts[stmt_type] = stmt
         elif stmt_type == 'order':
             # statement : statement order_statement
-
-            # check conflict between order by and aggregation function
-            if 'select' in stmts and stmts['select'][0] == 'aggregate':
-                raise Exception('Confliction between order by and select aggregation function')
+            if 'order' in stmts:
+                raise Exception('Duplicated order by, exists: order by %s, here: order by %s' %
+                                (stmts['order'].items(), p[2][1].items()))
 
             stmts['order'] = p[2][1]
+
+            # order by support select fields and select aggregationn function by group
+            if 'select' in stmts and 'aggregate' in stmts['select'] and not 'group' in stmts:
+                # check conflict between order by and aggregation function
+                raise Exception('Confliction between order by and select aggregation function')
         elif stmt_type == 'limit':
             # statement : statement limit_statement
+            if 'limit' in stmts:
+                raise Exception('Duplicated limit, exists: limit %s, here: limit %s' %
+                                (stmts['limit'], p[2][1]))
+
+            # limit support select fields and select aggregationn function by group
+            if 'select' in stmts and 'aggregate' in stmts['select'] and not 'group' in stmts:
+                # check conflict between order by and aggregation function
+                raise Exception('Confliction between limit and select aggregation function')
+
             stmts['limit'] = p[2][1]
+        elif stmt_type == 'group':
+            if 'group' in stmts:
+                raise Exception('Duplicated group by')
+
+            stmts['group'] = p[2][1]
 
 
 def p_select_stmt(p):
     '''
         select_statement : fields_select_stmt
                          | accu_func_stmt
+                         | accu_func_stmt ',' group_func_factor
+                         | group_func_factor ',' accu_func_stmt
     '''
-    # format of p[0]: ('select', ('field', [])) or ('select', ('accu', []))
-    if p[1][0] == 'aggregate':
-        # format of p[1]:
-        #   ('aggregate', OrderedDict([(max_st_size, MaxAccFuncCls), (min_st_ctime, MinAccFuncCls)])
-        #       transmit to
-        #   ('aggregate', [MaxAccFuncCls, MinAccFuncCls])
-        p[1] = ('aggregate', [v for _, v in p[1][1].items()])
-    p[0] = ('select', p[1])
+    # format of p[0]: ('select', ('field', [])), ('select', ('accu', [])), ('group_aggr', {'key', 'fn'})
+    p[0] = ('select', {})
+
+    d = p[0][1]
+    d[p[1][0]] = p[1][1]
+
+    if len(p) == 4:
+        d[p[3][0]] = p[3][1]
+    # aggr_func_idx = 1 if p[1][0] == 'aggregate' else 3
+    # # format of aggregation functions:
+    # #   ('aggregate', OrderedDict([(max_st_size, MaxAccFuncCls), (min_st_ctime, MinAccFuncCls)])
+    # #       transmit to
+    # #   ('aggregate', [MaxAccFuncCls, MinAccFuncCls])
+    # aggr_funcs = [v for _, v in p[aggr_func_idx][1].items()]
+
+    # if len(p) == 2:
+    #     p[0] = ('select', p[1])
+
+    # if len(p) == 4:
+    #     if p[1][0] == 'group_aggr':
+    #         aggr_funcs.insert(0, p[1][1]['key'])
+    #     else:
+    #         aggr_funcs.append(p[1][1]['key'])
+
+    # p[0] = ('select', aggr_funcs)
 
 
 def p_fields_select_stmt(p):
@@ -250,7 +350,8 @@ def p_accu_func_stmt1(p):
     accu_obj_name = op[0].upper() + op[1:].lower() + 'FuncCls'
     accu_obj = accu_func.__dict__[accu_obj_name]
     func_key = '%s(%s)' % (op, p[3])
-    fns = OrderedDict([(func_key.lower(), accu_obj(f))])
+    # fns = OrderedDict([(func_key.lower(), accu_obj(f))])
+    fns = OrderedDict([(func_key.lower(), lambda: accu_obj(f))])
     p[0] = ('aggregate', fns)
 
 
@@ -275,7 +376,7 @@ def p_accu_func_stmt2(p):
     if func_key in fns:
         raise Exception('Duplicated aggregation function, func: %s', func_key)
 
-    fns[func_key] = accu_obj(f)
+    fns[func_key] = lambda: accu_obj(f)
 
 
 def p_from_stmt(p):
@@ -354,7 +455,7 @@ def p_size_factor(p):
                     | SIZE LE NUMBER
     '''
     _, _, op, fsize = p
-    cmp_func = cmp_operators[op]
+    cmp_func = fstat_cmp_operators[op]
     p[0] = cmp_func('st_size', fsize)
 
 
@@ -446,12 +547,167 @@ def p_limit_statement(p):
         p[0][1].append(p[4])
 
 
+def p_time_factor(p):
+    '''
+        time_factor : ATIME
+                    | CTIME
+                    | MTIME
+    '''
+    p[0] = p[1]
+
+
+def p_group_func_factor(p):
+    '''
+        group_func_factor : MINUTE '(' time_factor ')'
+                          | HOUR '(' time_factor ')'
+                          | DATE '(' time_factor ')'
+                          | WEEK '(' time_factor ')'
+                          | DAY '(' time_factor ')'
+                          | MONTH '(' time_factor ')'
+                          | YEAR '(' time_factor ')'
+                          | FTYPE
+    '''
+    if len(p) == 5:
+        k = '%s(%s)' % (p[1].lower(), p[3])
+        fn = time_aggregate_operators[p[1].lower()]
+        p[0] = ('dimension_aggr', OrderedDict({k: fn('st_' + p[3])}))
+    else:
+        p[0] = ('dimension_aggr', OrderedDict({'ftype': ftype_aggregate_operator}))
+
+
+# def p_group_select_statement(p):
+#     '''
+#         group_select_statement : accu_func_stmt
+#                                | accu_func_stmt ',' group_func_factor
+#                                | group_func_factor ',' accu_func_stmt
+#     '''
+#     if isinstance(p[1], str):
+#         aggr_funcs = [v for _, v in p[3][1].items()]
+#     else:
+#         aggr_funcs = [v for _, v in p[1][1].items()]
+
+#     if len(p) != 2:
+#         if isinstance(p[1], str):
+#             aggr_funcs.insert(0, p[1]['key'])  # same to aggr_funcs[0:0] = [p[1]]
+#         else:
+#             aggr_funcs.append(p[3]['key'])
+
+#     p[0] = ('select', aggr_funcs)
+
+
+def p_having_statement(p):
+    '''
+        having_statement : HAVING having_condition
+    '''
+    p[0] = p[2]
+
+
+def p_having_condition(p):
+    '''
+        having_condition : having_condition OR having_and_factor
+                         | having_and_factor
+    '''
+    if len(p) == 2:
+        p[0] = p[1]
+    else:
+        p[1]['aggregations'].update(p[3]['aggregations'])
+        p[0] = {'aggregations': p[1],
+                'fn': lambda having_data: p[1]['fn'](having_data) or p[3]['fn'](having_data)}
+
+
+def p_having_and_factor(p):
+    '''
+        having_and_factor : having_and_factor AND having_factor
+                          | having_factor
+    '''
+    if len(p) == 2:
+        p[0] = p[1]
+    else:
+        p[1]['aggregations'].update(p[3]['aggregations'])
+        p[0] = {'aggregations': p[1],
+                'fn': lambda having_data: p[1]['fn'](having_data) and p[3]['fn'](having_data)}
+
+
+def p_having_factor(p):
+    '''
+        having_factor : accu_func_stmt '=' NUMBER
+                      | accu_func_stmt NE NUMBER
+                      | accu_func_stmt '>' NUMBER
+                      | accu_func_stmt GE NUMBER
+                      | accu_func_stmt '<' NUMBER
+                      | accu_func_stmt LE NUMBER
+                      | '(' having_condition ')'
+                      | NOT having_factor
+    '''
+    if p[1] == '(':
+        # having_factor : '(' having_condition ')'
+        p[0] = p[2]
+    elif len(p) == 3:
+        # having_factor : NOT having_factor
+        p[0] = p[2]
+        p[0]['fn'] = lambda having_data: not p[0]['fn']
+    else:
+        _, val, op, num = p
+        if len(val[1]) != 1:
+            raise Exception('Only 1 aggregation function is supported for comparision, funcs:',
+                            [v for v, _ in val[1].items()])
+
+        # aggregations: OrderedDict(aggregation_func_key -> AccuFuncCls)
+        p[0] = {'aggregations': p[1][1]}
+
+        # only has one key
+        aggr_func_key = p[1][1].keys()[0]
+
+        if op == '=':
+            p[0]['fn'] = lambda having_data: having_data[aggr_func_key] == num
+        elif op == '!=':
+            p[0]['fn'] = lambda having_data: having_data[aggr_func_key] != num
+        elif op == '>':
+            p[0]['fn'] = lambda having_data: having_data[aggr_func_key] > num
+        elif op == '>=':
+            p[0]['fn'] = lambda having_data: having_data[aggr_func_key] >= num
+        elif op == '<':
+            p[0]['fn'] = lambda having_data: having_data[aggr_func_key] < num
+        elif op == '<=':
+            p[0]['fn'] = lambda having_data: having_data[aggr_func_key] <= num
+
+
+def p_group_by_statemennt(p):
+    '''
+        group_by_statement : GROUP BY FTYPE
+                           | GROUP BY group_func_factor
+                           | GROUP BY FTYPE having_statement
+                           | GROUP BY group_func_factor having_statement
+    '''
+    # structure of p[0](dict, group result):
+    #   'dimension_aggr'(dict: str -> func):
+    #       'ftype': str fun(finfo{'name', 'stat'})
+    #       'minute(ctime)': str func(finfo{'name', 'stat'})
+    #       ...
+    #   'having'(dict):
+    #       'aggregations': OrderedDict(aggr_key -> AccuFuncCls)
+    #           'max(ctime)': AccuFuncCls
+    #           ...
+    #       'fn': boolean func(having_data{same to 'aggregations'})
+    p[0] = ('group', {'dimension_aggr': OrderedDict()})
+
+    g = p[0][1]
+    if isinstance(p[3], str):
+        # group_by_statement : GROUP BY FTYPE.*
+        g['dimension_aggr']['ftype'] = ftype_aggregate_operator
+    else:
+        g['dimension_aggr'].update(p[3][1])
+
+    if len(p) == 5:
+        g['having'] = p[4]
+
+
 def time_proc(p):
     _, field_name, op, d = p
     d = time.mktime(d.timetuple())
     field_name = 'st_' + field_name.lower()
 
-    cmp_func = cmp_operators[op]
+    cmp_func = fstat_cmp_operators[op]
     p[0] = cmp_func(field_name, d)
 
 
