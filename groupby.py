@@ -53,6 +53,7 @@ class GroupBy(object):
         if self._accu_selector is None:
             return self._dimension_accufuncs
         else:
+            # execute having clause
             ret = OrderedDict()
             for d in self._dimension_accufuncs:
                 acc_vals = self._dimension_accufuncs[d]
@@ -64,12 +65,6 @@ class GroupBy(object):
     def get_accu_func(self):
         return [f() for f in self._accu_func_creators]
 
-    def get_accu_func_count(self):
-        return len(self._accu_func_creators)
-
     def get_dim_name(self):
         return self._dim_name
-
-    def is_groupby(self):
-        return not (len(self._dimensions) == 1 and '*' in self._dimensions)
 
