@@ -136,6 +136,7 @@ grammar:
                       | WEEK '(' time_factor ')'
                       | MONTH '(' time_factor ')'
                       | YEAR '(' time_factor ')'
+                      | FTYPE
 
     having_statement : HAVING having_condition
 
@@ -154,9 +155,7 @@ grammar:
                   | '(' having_condition ')'
                   | NOT having_factor
 
-    group_by_statement : GROUP BY FTYPE
-                       | GROUP BY group_func_factor
-                       | GROUP BY FTYPE having_statement
+    group_by_statement : GROUP BY group_func_factor
                        | GROUP BY group_func_factor having_statement
 
 '''
@@ -674,9 +673,7 @@ def p_having_factor(p):
 
 def p_group_by_statemennt(p):
     '''
-        group_by_statement : GROUP BY FTYPE
-                           | GROUP BY group_func_factor
-                           | GROUP BY FTYPE having_statement
+        group_by_statement : GROUP BY group_func_factor
                            | GROUP BY group_func_factor having_statement
     '''
     # structure of p[0](dict, group result):
@@ -689,15 +686,10 @@ def p_group_by_statemennt(p):
     #           'max(ctime)': AccuFuncCls
     #           ...
     #       'fn': boolean func(having_data{same to 'aggregations'})
-    p[0] = ('group', {'dimension_aggr': OrderedDict()})
+    p[0] = ('group', {})
 
     g = p[0][1]
-    if isinstance(p[3], str):
-        # group_by_statement : GROUP BY FTYPE.*
-        g['dimension_aggr']['ftype'] = ftype_aggregate_operator
-    else:
-        g['dimension_aggr'].update(p[3][1])
-
+    g['dimension_aggr'] = p[3][1]
     if len(p) == 5:
         g['having'] = p[4]
 
