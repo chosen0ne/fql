@@ -6,6 +6,8 @@
 # @author:  chosen0ne(louzhenlin86@126.com)
 # @date:    2019-05-16 11:04:32
 
+from collections import OrderedDict
+
 
 class GroupBy(object):
     def __init__(self, **kwargs):
@@ -31,7 +33,7 @@ class GroupBy(object):
         self._accu_selector = selector
 
         # dimension(str) -> list of AccuFuncCls
-        self._dimension_accufuncs = {}
+        self._dimension_accufuncs = OrderedDict()
 
         self._dim_name = '&'.join([n for n in self._dimensions.keys()])
 
@@ -51,7 +53,7 @@ class GroupBy(object):
         if self._accu_selector is None:
             return self._dimension_accufuncs
         else:
-            ret = {}
+            ret = OrderedDict()
             for d in self._dimension_accufuncs:
                 acc_vals = self._dimension_accufuncs[d]
                 if self._accu_selector(dict([(a.key(), a.val()) for a in acc_vals])):

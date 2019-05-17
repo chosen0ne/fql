@@ -11,7 +11,7 @@ import glob
 import os
 import accu_func
 from collections import OrderedDict
-from print_utils import FieldPrinter
+from print_utils import *
 from grammar_parser import parser
 from groupby import GroupBy
 
@@ -66,14 +66,14 @@ def execute(**kwargs):
 
     if show_fields:
         query_mode = MODE_SELECT_FIELDS
-    else if not g_stmt:
+    elif not g_stmt:
         query_mode = MODE_SELECT_AGGR
     else:
         query_mode = MODE_GROUP_AGGR
 
     # use GroupBy to process group by aggragation or normal aggragation.
     # When normal aggragation is executed, all the files is treated as in one group '*'
-    if query_mode == MODE_GROUP_AGGR:
+    if query_mode != MODE_GROUP_AGGR:
         # no group by, all the files are in one group
         g_stmt = {'dimension_aggr': OrderedDict({'*': lambda a: '*'})}
 
@@ -81,37 +81,43 @@ def execute(**kwargs):
 
     groupby = GroupBy(**g_stmt)
 
-    # print table, info for echo row
-    printer = FieldPrinter(f_stmt, show_fields, dim_fields, groupby)
-    printer.print_title()
-
     # all the files matched to where condition
     files = []
-    travel_file_tree(f_stmt, w_stmt, printer, files, groupby)
+    travel_file_tree(f_stmt, w_stmt, files, groupby)
 
-    if o_stmt:
-        files.sort(_order_cmp(o_stmt))
+    # fetch rows
+    rows = None
+    if query_mode == MODE_SELECT_FIELDS:
+        if o_stmt:
+            files.sort(_order_cmp(o_stmt))
+        rows = files
+    elif query_mode == MODE_SELECT_AGGR:
+        rows = groupby.get_dimension_vals()['*']
+    else:
+        rows = groupby.get_dimension_vals()
 
-    if l_stmt:
-        if len(l_stmt) == 1:
-            files = files[0:l_stmt[0]]
-        else:
-            count, start = l_stmt
-            files = files[start: start + count]
+    # order by or limit
+    if query_mode != MODE_SELECT_AGGR:
+        if l_stmt:
+            s, c = (0, l_stmt[0]) if len(l_stmt) == 1 else l_stmt
+            rows = rows[s: s+c]
 
-    for f in files:
-        printer.print_finfo(f['name'], f['stat'])
+    printer = None
+    if query_mode == MODE_SELECT_FIELDS:
+        printer = FieldPrinter(show_fields, files)
+    elif query_mode == MODE_SELECT_AGGR:
+        printer = AggregatePrinter(f_stmt, rows)
+    elif query_mode == MODE_GROUP_AGGR:
+        printer = GroupPrinter(rows, groupby.get_dim_name(), groupby.get_accu_func())
 
-    # print accumulative func
-    printer.print_accu_funcs()
+    printer.print_table()
 
-    printer.print_group_by()
 
 # @param start_point(str)
 # @param selector(func: boolean selector(finfo))
 # @param printer(FieldPrinter)
 # @param files(list of finfo{'name', 'stat'})
-def travel_file_tree(start_point, selector, printer, files, groupby=None):
+def travel_file_tree(start_point, selector, files, groupby=None):
     g = glob.glob(start_point + '/*')
     for f in g:
         statinfo = os.stat(f)
@@ -123,7 +129,7 @@ def travel_file_tree(start_point, selector, printer, files, groupby=None):
             groupby(finfo)
 
         if os.path.isdir(f):
-            travel_file_tree(f, selector, printer, files, groupby)
+            travel_file_tree(f, selector, files, groupby)
 
 
 def _order_cmp(order_keys):
