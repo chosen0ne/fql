@@ -14,11 +14,6 @@ from collections import OrderedDict
 from ply import yacc
 from lex_parser import *
 
-'''
-group query:
-    select minute(ctime), sum(size) from . where atime > 2019-05-15 group by minute(ctime) having count(*) > 2
-    select ftype, sum(size) from . where atime > 2019-05-15 group by ftype having count(*) > 2
-'''
 
 '''
 grammar:
@@ -122,9 +117,13 @@ grammar:
                  | ATIME LE datetime_factor
                  | ATIME NE datetime_factor
 
-    order_factor : a_field
-                 | a_field ASC
-                 | a_field DESC
+    order_sub_factor : a_field
+                     | accu_func_stmt
+                     | group_func_factor
+
+    order_factor : order_sub_factor
+                 | order_sub_factor ASC
+                 | order_sub_factor DESC
 
     time_factor : ATIME
                 | CTIME
@@ -132,8 +131,7 @@ grammar:
 
     group_func_factor : MINUTE '(' time_factor ')'
                       | HOUR '(' time_factor ')'
-                      | DATE '(' time_factor ')'
-                      | WEEK '(' time_factor ')'
+                      | DAY '(' time_factor ')'
                       | MONTH '(' time_factor ')'
                       | YEAR '(' time_factor ')'
                       | FTYPE
@@ -527,6 +525,7 @@ def p_order_sub_factor(p):
     '''
         order_sub_factor : a_field
                          | accu_func_stmt
+                         | group_func_factor
     '''
     # return a list of fields
     if isinstance(p[1], str):
@@ -580,8 +579,6 @@ def p_group_func_factor(p):
     '''
         group_func_factor : MINUTE '(' time_factor ')'
                           | HOUR '(' time_factor ')'
-                          | DATE '(' time_factor ')'
-                          | WEEK '(' time_factor ')'
                           | DAY '(' time_factor ')'
                           | MONTH '(' time_factor ')'
                           | YEAR '(' time_factor ')'
@@ -593,26 +590,6 @@ def p_group_func_factor(p):
         p[0] = ('dimension_aggr', OrderedDict({k: fn('st_' + p[3])}))
     else:
         p[0] = ('dimension_aggr', OrderedDict({'ftype': ftype_aggregate_operator}))
-
-
-# def p_group_select_statement(p):
-#     '''
-#         group_select_statement : accu_func_stmt
-#                                | accu_func_stmt ',' group_func_factor
-#                                | group_func_factor ',' accu_func_stmt
-#     '''
-#     if isinstance(p[1], str):
-#         aggr_funcs = [v for _, v in p[3][1].items()]
-#     else:
-#         aggr_funcs = [v for _, v in p[1][1].items()]
-
-#     if len(p) != 2:
-#         if isinstance(p[1], str):
-#             aggr_funcs.insert(0, p[1]['key'])  # same to aggr_funcs[0:0] = [p[1]]
-#         else:
-#             aggr_funcs.append(p[3]['key'])
-
-#     p[0] = ('select', aggr_funcs)
 
 
 def p_having_statement(p):
