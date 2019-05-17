@@ -160,10 +160,10 @@ grammar:
 
 '''
 
-precedence = (
-        ('left', 'NUMBER'),
-        ('left', ',')
-)
+# precedence = (
+#         ('left', 'NUMBER'),
+#         ('left', ',')
+# )
 
 # used to compare file stats, such as st_size, st_ctime, st_atime...
 fstat_cmp_operators = {
@@ -344,7 +344,7 @@ def p_accu_func_stmt1(p):
                        | COUNT '(' '*' ')'
                        | SUM '(' SIZE ')'
     '''
-    f = 'st_' + p[3].lower()
+    f = p[3].lower()
     op = p[1]
     accu_obj_name = op[0].upper() + op[1:].lower() + 'FuncCls'
     accu_obj = accu_func.__dict__[accu_obj_name]
@@ -366,7 +366,7 @@ def p_accu_func_stmt2(p):
     p[0] = p[1]
 
     fns = p[0][1]
-    f = 'st_' + p[5].lower()
+    f = p[5].lower()
     op = p[3]
     accu_obj_name = op[0].upper() + op[1:].lower() + 'FuncCls'
     accu_obj = accu_func.__dict__[accu_obj_name]
@@ -517,20 +517,41 @@ def p_order_statement(p):
 
     orders = p[0][1]
 
-    field, ad = p[3]
-    if field in orders:
-        raise Exception('Duplicated field of ORDER BY, field: %s' % field)
-    orders[field] = ad
+    for f, ad in p[3]:
+        if f in orders:
+            raise Exception('Duplicated field of ORDER BY, field: %s' % f)
+        orders[f] = ad
+
+
+def p_order_sub_factor(p):
+    '''
+        order_sub_factor : a_field
+                         | accu_func_stmt
+    '''
+    # return a list of fields
+    if isinstance(p[1], str):
+        p[0] = [p[1]]
+    else:
+        p[0] = p[1][1].keys()
 
 
 def p_order_factor(p):
     '''
-        order_factor : a_field
-                     | a_field ASC
-                     | a_field DESC
+        order_factor : order_sub_factor
+                     | order_sub_factor ASC
+                     | order_sub_factor DESC
     '''
-    # (field_name, asc/desc)
-    p[0] = (p[1], p[2].lower() if len(p) == 3 else 'asc')
+    # [(field_name, asc/desc)*]
+    p[0] = []
+    if len(p) == 2:
+        p[0].extend([(f, 'asc') for f in p[1]])
+    else:
+        # 'max(ctime), count(*) asc' will be pared to
+        #       order_sub_factor ASC
+        # p[1] = ['max(ctime)', 'count(*)']
+        # ASC or DESC need to be added to the last element
+        p[0].extend([(f, 'asc') for f in p[1][:-1]])
+        p[0].append((p[1][-1], p[2].lower() if len(p) == 3 else 'asc'))
 
 
 def p_limit_statement(p):

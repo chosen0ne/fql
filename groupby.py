@@ -32,7 +32,7 @@ class GroupBy(object):
         # accu_result is value of aggregations
         self._accu_selector = selector
 
-        # dimension(str) -> list of AccuFuncCls
+        # OrderedDict: dimension(str) -> dict{aggr func key -> AccuFuncCls}
         self._dimension_accufuncs = OrderedDict()
 
         self._dim_name = '&'.join([n for n in self._dimensions.keys()])
@@ -42,25 +42,43 @@ class GroupBy(object):
 
         dim_val.strip()
         if not dim_val in self._dimension_accufuncs:
-            self._dimension_accufuncs[dim_val] = []
+            self._dimension_accufuncs[dim_val] = OrderedDict()
             for f in self._accu_func_creators:
-                self._dimension_accufuncs[dim_val].append(f())
+                fn = f()
+                self._dimension_accufuncs[dim_val][fn.key()] = fn
 
-        for f in self._dimension_accufuncs[dim_val]:
+        for f in self._dimension_accufuncs[dim_val].values():
             f(finfo)
 
     def get_dimension_vals(self):
         if self._accu_selector is None:
             return self._dimension_accufuncs
-        else:
-            # execute having clause
-            ret = OrderedDict()
-            for d in self._dimension_accufuncs:
-                acc_vals = self._dimension_accufuncs[d]
-                if self._accu_selector(dict([(a.key(), a.val()) for a in acc_vals])):
-                    ret[d] = acc_vals
 
-            return ret
+        ret = OrderedDict()
+        for d, acc_vals in self._dimension_accufuncs.items():
+            if self._accu_selector(dict([(a.key(), a.val()) for a in acc_vals])):
+                rows[d] = acc_vals
+        return ret
+
+    def get_dimension_rows(self):
+        '''
+            return list of dict{aggre func key -> AccuFuncCls}
+        '''
+        rows = self._dimension_accufuncs
+        if not self._accu_selector is None:
+            # execute having clause
+            rows = OrderedDict()
+            for d, acc_vals in self._dimension_accufuncs.items():
+                if self._accu_selector(dict([(a.key(), a.val()) for a in acc_vals])):
+                    rows[d] = acc_vals
+
+        ret = []
+        for d, row in rows.items():
+            row[self._dim_name] = d
+            ret.append(row)
+
+        return ret
+
 
     def get_accu_func(self):
         return [f() for f in self._accu_func_creators]

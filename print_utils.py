@@ -7,6 +7,7 @@
 # @date:    2015/01/21 14:43:05
 import itertools
 from datetime import datetime
+from accu_func import AccuFuncCls
 
 
 ALL_FIELDS = ['name', 'ctime', 'mtime', 'atime', 'size']
@@ -128,12 +129,12 @@ class FieldPrinter(Printer):
 class AggregatePrinter(Printer):
     def __init__(self, from_dir, accu_funcs):
         self._rows = []
-        for fn in accu_funcs:
+        for fn in accu_funcs.values():
             field_name = '%s of %s' % (fn.key(), from_dir)
             if fn.fname():
                 field_name += ': ' + fn.fname()
 
-            val = self._fetch_size_val(fn.val()) if fn.desp()[1] == 'st_size' else fn.val()
+            val = self._fetch_size_val(fn.val()) if fn.desp()[1] == 'size' else fn.val()
 
             self._rows.append((field_name, str(val)))
 
@@ -142,18 +143,22 @@ class AggregatePrinter(Printer):
 
 
 class GroupPrinter(Printer):
-    def __init__(self, dim_vals, dim_name, accu_fns):
+    def __init__(self, dim_rows, dim_name, accu_fns):
         self._fields = [dim_name]
         self._fields.extend([f.key() for f in accu_fns])
 
         self._rows = []
-        for d, fns in dim_vals.items():
-            r = [d]
-            for fn in fns:
-                t, f = fn.desp()
-                val = self._fetch_size_val(fn.val()) if f == 'st_size' else str(fn.val())
-                if fn.fname():
-                    val = val + ': ' + fn.fname()
+        # dim_rows is a list of dict{str -> str / AccuFuncCls}
+        for r_dict in dim_rows:
+            r = []
+            for f in self._fields:
+                val = r_dict[f]
+                if isinstance(val, AccuFuncCls):
+                    fn = val
+                    t, f = fn.desp()
+                    val = self._fetch_size_val(fn.val()) if f == 'size' else str(fn.val())
+                    if fn.fname():
+                        val = val + ': ' + fn.fname()
 
                 r.append(val)
 

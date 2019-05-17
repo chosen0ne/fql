@@ -9,11 +9,11 @@
 import os.path
 import glob
 import os
-import accu_func
 from collections import OrderedDict
 from print_utils import *
 from grammar_parser import parser
 from groupby import GroupBy
+from accu_func import AccuFuncCls
 
 
 func_type = type(lambda a: 0)
@@ -86,15 +86,18 @@ def execute(**kwargs):
     travel_file_tree(f_stmt, w_stmt, files, groupby)
 
     # fetch rows
-    rows = None
+    order_fn = None
     if query_mode == MODE_SELECT_FIELDS:
-        if o_stmt:
-            files.sort(_order_cmp(o_stmt))
         rows = files
+        if o_stmt:
+            order_fn = _fields_order_cmp
     elif query_mode == MODE_SELECT_AGGR:
         rows = groupby.get_dimension_vals()['*']
+        print rows
     else:
-        rows = groupby.get_dimension_vals()
+        rows = groupby.get_dimension_rows()
+        if o_stmt:
+            order_fn = _group_order_cmp
 
     # order by or limit
     if query_mode != MODE_SELECT_AGGR:
@@ -102,7 +105,9 @@ def execute(**kwargs):
             s, c = (0, l_stmt[0]) if len(l_stmt) == 1 else l_stmt
             rows = rows[s: s+c]
 
-    printer = None
+    if order_fn:
+        rows.sort(order_fn(o_stmt))
+
     if query_mode == MODE_SELECT_FIELDS:
         printer = FieldPrinter(show_fields, files)
     elif query_mode == MODE_SELECT_AGGR:
@@ -132,10 +137,10 @@ def travel_file_tree(start_point, selector, files, groupby=None):
             travel_file_tree(f, selector, files, groupby)
 
 
-def _order_cmp(order_keys):
+def _fields_order_cmp(order_keys):
     def inner_cmp(a, b):
         # type of a, b is (filename, fstat)
-        for k, ad in reversed(order_keys.items()):
+        for k, ad in order_keys.items():
             if k == 'name':
                 if a['name'] == b['name']:
                     continue
@@ -150,4 +155,24 @@ def _order_cmp(order_keys):
         return 0
 
     return inner_cmp
+
+
+def _group_order_cmp(order_keys):
+    def inner_cmp(a, b):
+        '''
+            a & b is a dict{str -> object}
+        '''
+        for k, ad in order_keys.items():
+            va, vb = a[k], b[k]
+            if isinstance(a[k], AccuFuncCls):
+                va, vb = a[k].val(), b[k].val()
+            if va == vb:
+                continue
+
+            return cmp(va, vb) if ad == 'asc' else cmp(vb, va)
+
+        return 0
+
+    return inner_cmp
+
 
