@@ -59,7 +59,7 @@ def execute(**kwargs):
     l_stmt = kwargs.get('limit')
     g_stmt = kwargs.get('group')
 
-    show_fields = set([f for f in s_stmt['field']]) if 'field' in s_stmt else {}
+    show_fields = set([f for f in s_stmt['field']]) if 'field' in s_stmt else set()
     accu_funcs = s_stmt['aggregate'] if 'aggregate' in s_stmt else {}
     dim_fields = '&'.join([k for k in s_stmt['dimension_aggr'].keys()]) \
             if 'dimension_aggr' in s_stmt else None
@@ -93,7 +93,6 @@ def execute(**kwargs):
             order_fn = _fields_order_cmp
     elif query_mode == MODE_SELECT_AGGR:
         rows = groupby.get_dimension_vals()['*']
-        print rows
     else:
         rows = groupby.get_dimension_rows()
         if o_stmt:
@@ -103,8 +102,8 @@ def execute(**kwargs):
         rows.sort(order_fn(o_stmt))
 
     if query_mode != MODE_SELECT_AGGR and l_stmt:
-            s, c = (0, l_stmt[0]) if len(l_stmt) == 1 else l_stmt
-            rows = rows[s: s+c]
+        s, c = (0, l_stmt[0]) if len(l_stmt) == 1 else l_stmt
+        rows = rows[s: s+c]
 
     if query_mode == MODE_SELECT_FIELDS:
         printer = FieldPrinter(show_fields, rows)
