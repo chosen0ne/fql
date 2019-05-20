@@ -67,15 +67,11 @@ class GroupBy(object):
         rows = self._dimension_accufuncs
         if self._accu_selector:
             # execute having clause
-            rows = OrderedDict()
+            ret = []
             for d, acc_vals in self._dimension_accufuncs.items():
                 if self._accu_selector(dict([(a.key(), a.val()) for a in acc_vals.values()])):
-                    rows[d] = acc_vals
-
-        ret = []
-        for d, row in rows.items():
-            row[self._dim_name] = d
-            ret.append(row)
+                    acc_vals[self._dim_name] = d
+                    ret.append(acc_vals)
 
         return ret
 
