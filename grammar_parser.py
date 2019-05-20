@@ -194,6 +194,32 @@ def ftype_aggregate_operator(finfo):
     return finfo['name'][idx:] if idx != -1 else '$'
 
 
+def check_order_stmt(stmts, order_stmt):
+    if 'order' in stmts:
+        raise Exception('Duplicated order by, exists: order by %s, here: order by %s' %
+                        (stmts['order'].items(), order_stmt.items()))
+
+    if 'limit' in stmts:
+        raise Exception('\'limit\' must be used behind \'order by\'')
+
+
+def check_limit_stmt(stmts, limit_stmt):
+    if 'limit' in stmts:
+        raise Exception('Duplicated limit, exists: limit %s, here: limit %s' %
+                        (stmts['limit'], limit_stmt))
+
+
+def check_group_stmt(stmts, group_stmt):
+    if 'group' in stmts:
+        raise Exception('Duplicated group by')
+
+    if 'order' in stmts:
+        raise Exception('\'order by\' must be used behind \'group by\'')
+
+    if 'limit' in stmts:
+        raise Exception('\'limit\' must be used behind \'group by\'')
+
+
 def p_statement(p):
     '''
         statement : SELECT select_statement from_statement where_statement
@@ -231,31 +257,17 @@ def p_statement(p):
             stmts[stmt_type] = stmt
         elif stmt_type == 'order':
             # statement : statement order_statement
-            if 'order' in stmts:
-                raise Exception('Duplicated order by, exists: order by %s, here: order by %s' %
-                                (stmts['order'].items(), p[2][1].items()))
+            check_order_stmt(stmts, p[2][1])
 
             stmts['order'] = p[2][1]
 
-            # order by support select fields and select aggregationn function by group
-            if 'select' in stmts and 'aggregate' in stmts['select'] and not 'group' in stmts:
-                # check conflict between order by and aggregation function
-                raise Exception('Confliction between order by and select aggregation function')
         elif stmt_type == 'limit':
             # statement : statement limit_statement
-            if 'limit' in stmts:
-                raise Exception('Duplicated limit, exists: limit %s, here: limit %s' %
-                                (stmts['limit'], p[2][1]))
-
-            # limit support select fields and select aggregationn function by group
-            if 'select' in stmts and 'aggregate' in stmts['select'] and not 'group' in stmts:
-                # check conflict between order by and aggregation function
-                raise Exception('Confliction between limit and select aggregation function')
+            check_limit_stmt(stmts, p[2][1])
 
             stmts['limit'] = p[2][1]
         elif stmt_type == 'group':
-            if 'group' in stmts:
-                raise Exception('Duplicated group by')
+            check_group_stmt(stmts, p[2][1])
 
             stmts['group'] = p[2][1]
 

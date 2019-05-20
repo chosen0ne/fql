@@ -71,6 +71,12 @@ def execute(**kwargs):
     else:
         query_mode = MODE_GROUP_AGGR
 
+    if query_mode == MODE_SELECT_AGGR and o_stmt:
+        raise Exception('\'order by\' isn\'t supported in select aggregation')
+
+    if query_mode == MODE_SELECT_AGGR and l_stmt:
+        raise Exception('\'limit\' isn\'t supported in select aggregation')
+
     # use GroupBy to process group by aggragation or normal aggragation.
     # When normal aggragation is executed, all the files is treated as in one group '*'
     if query_mode != MODE_GROUP_AGGR:
