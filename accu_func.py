@@ -68,7 +68,7 @@ class SumFuncCls(AccuFuncCls):
         return self._total
 
     def desp(self):
-        return 'sum', self._st_field
+        return 'sum', self._field
 
 
 class MaxFuncCls(AccuFuncCls):
