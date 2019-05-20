@@ -109,7 +109,7 @@ def execute(**kwargs):
         rows.sort(order_fn(o_stmt))
 
     if query_mode == MODE_SELECT_FIELDS:
-        printer = FieldPrinter(show_fields, files)
+        printer = FieldPrinter(show_fields, rows)
     elif query_mode == MODE_SELECT_AGGR:
         printer = AggregatePrinter(f_stmt, rows)
     elif query_mode == MODE_GROUP_AGGR:
