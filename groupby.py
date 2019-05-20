@@ -65,11 +65,11 @@ class GroupBy(object):
             return list of dict{aggre func key -> AccuFuncCls}
         '''
         rows = self._dimension_accufuncs
-        if not self._accu_selector is None:
+        if self._accu_selector:
             # execute having clause
             rows = OrderedDict()
             for d, acc_vals in self._dimension_accufuncs.items():
-                if self._accu_selector(dict([(a.key(), a.val()) for a in acc_vals])):
+                if self._accu_selector(dict([(a.key(), a.val()) for a in acc_vals.values()])):
                     rows[d] = acc_vals
 
         ret = []
