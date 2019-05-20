@@ -99,14 +99,12 @@ def execute(**kwargs):
         if o_stmt:
             order_fn = _group_order_cmp
 
-    # order by or limit
-    if query_mode != MODE_SELECT_AGGR:
-        if l_stmt:
-            s, c = (0, l_stmt[0]) if len(l_stmt) == 1 else l_stmt
-            rows = rows[s: s+c]
-
     if order_fn:
         rows.sort(order_fn(o_stmt))
+
+    if query_mode != MODE_SELECT_AGGR and l_stmt:
+            s, c = (0, l_stmt[0]) if len(l_stmt) == 1 else l_stmt
+            rows = rows[s: s+c]
 
     if query_mode == MODE_SELECT_FIELDS:
         printer = FieldPrinter(show_fields, rows)
