@@ -86,6 +86,9 @@ def execute(**kwargs):
     g_stmt['accu_funcs'] = accu_funcs
 
     groupby = GroupBy(**g_stmt)
+    if dim_fields != groupby.get_dim_name():
+        raise Exception('Dimensions in select and group by are different, select: %s, group by: %s' \
+                % (dim_fields, groupby.get_dim_name()))
 
     # all the files matched to where condition
     files = []
