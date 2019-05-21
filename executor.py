@@ -73,6 +73,17 @@ def execute(**kwargs):
     accu_funcs = s_stmt['aggregations'] if 'aggregations' in s_stmt else {}
     dim_fields = '&'.join([k for k in s_stmt['dimension_aggr'].keys()]) \
             if 'dimension_aggr' in s_stmt else None
+    aliases = s_stmt['alias'] if 'alias' in s_stmt else None
+
+    # replacement of alias
+    if aliases:
+        if o_stmt:
+            order_fields = o_stmt['fields']
+            alias_replace(aliases['from_alias'], order_fields)
+
+        if g_stmt:
+            group_fields = g_stmt['dimension_aggr']
+            aggregation_alias_replace(aliases['from_alias'], group_fields, s_stmt['dimension_aggr'])
 
     if show_fields:
         query_mode = MODE_SELECT_FIELDS
@@ -191,6 +202,24 @@ def _group_order_cmp(order_keys):
         return 0
 
     return inner_cmp
+
+
+def alias_replace(aliases, data_dict):
+    for f, data in data_dict.items():
+        if f in aliases:
+            data_dict[aliases[f]] = data
+            del(data_dict[f])
+
+
+def aggregation_alias_replace(aliases, data_dict, aggr_funcs):
+    for f, data in data_dict.items():
+        if f in aliases:
+            dim_name = aliases[f]
+            if not aggr_funcs or not dim_name in aggr_funcs:
+                raise Exception('undefined aggregation alias for %s' % f)
+            data_dict[dim_name] = aggr_funcs[dim_name]
+            del(data_dict[f])
+
 
 
 class OuputJsonEncoder(json.JSONEncoder):

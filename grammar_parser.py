@@ -35,6 +35,7 @@ grammar:
                   | '*'
                   | accu_func_factor
                   | group_func_factor
+                  | select_factor as FNAME
 
     from_statement : FROM FNAME
 
@@ -117,6 +118,7 @@ grammar:
     order_sub_factor : a_field
                      | accu_func_factor
                      | group_func_factor
+                     | FNAME
 
     order_factor : order_sub_factor
                  | order_sub_factor ASC
@@ -151,7 +153,9 @@ grammar:
                   | NOT having_factor
 
     group_by_statement : GROUP BY group_func_factor
+                       | GROUP BY FNAME
                        | GROUP BY group_func_factor having_statement
+                       | GROUP BY FNAME having_statement
 
 '''
 
@@ -291,7 +295,15 @@ def p_select_stmt(p):
     d = p[0][1]
     factor_idx = 1 if len(p) == 2 else 3
 
-    t, (field, func) = p[factor_idx]
+    t, factor = p[factor_idx]
+    if t == 'alias':
+        if not 'alias' in d:
+            d['alias'] = {'from_alias': {}, 'to_alias': {}}
+        d['alias']['from_alias'].update(factor['from_alias'])
+        d['alias']['to_alias'].update(factor['to_alias'])
+        t, factor = factor['factor']
+
+    field, func = factor
     if not t in d:
         d[t] = OrderedDict()
 
@@ -307,9 +319,15 @@ def p_select_factor(p):
                       | '*'
                       | accu_func_factor
                       | group_func_factor
+                      | select_factor AS FNAME
     '''
     if isinstance(p[1], str):
         p[0] = ('field', (p[1], 1))
+    elif len(p) == 4:
+        alias = {'from_alias': {p[3]: p[1][1][0]},
+                'to_alias': {p[1][1][0]: p[3]},
+                'factor': p[1]}
+        p[0] = ('alias', alias)
     else:
         p[0] = p[1]
 
@@ -518,6 +536,7 @@ def p_order_sub_factor(p):
         order_sub_factor : a_field
                          | accu_func_factor
                          | group_func_factor
+                         | FNAME
     '''
     # p[0]:
     #   - field: a field
@@ -663,7 +682,9 @@ def p_having_factor(p):
 def p_group_by_statemennt(p):
     '''
         group_by_statement : GROUP BY group_func_factor
+                           | GROUP BY FNAME
                            | GROUP BY group_func_factor having_statement
+                           | GROUP BY FNAME having_statement
     '''
     # structure of p[0](dict, group result):
     #   'dimension_aggr'(dict: str -> func):
@@ -678,6 +699,9 @@ def p_group_by_statemennt(p):
     p[0] = ('group', {})
 
     g = p[0][1]
+    if isinstance(p[3], str):
+        p[3] = ('', (p[3], 1))
+
     g['dimension_aggr'] = OrderedDict([p[3][1]])
     if len(p) == 5:
         g['having'] = p[4]

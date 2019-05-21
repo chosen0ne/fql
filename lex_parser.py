@@ -20,6 +20,7 @@ reserved = {
     'limit': 'LIMIT',
     'group': 'GROUP',
     'having': 'HAVING',
+    'as': 'AS',
     'or': 'OR',
     'not': 'NOT',
     'like': 'LIKE',
@@ -68,6 +69,7 @@ t_DESC = r'(desc)|(DESC)'
 t_LIMIT = r'(limit)|(LIMIT)'
 t_GROUP = r'(group)|(GROUP)'
 t_HAVING = r'(having)|(HAVING)'
+t_AS = r'(as)|(AS)'
 t_OR = r'(or)|(OR)'
 t_NOT = r'(not)|(NOT)'
 t_LE = r'<='
