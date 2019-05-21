@@ -48,6 +48,8 @@ def opt_parse():
                       help='show version info', action='store_true')
     parser.add_option('-d', '--max-depth', dest='depth', default=3,
                       type='int', help='max depth to travel')
+    parser.add_option('-g', '--debug', dest='debug', default=False,
+                      help='show debug information', action='store_true')
 
     return parser.parse_args()
 
@@ -62,8 +64,10 @@ if __name__ == '__main__':
         show_version()
         sys.exit()
 
+    conf = {'depth': opt.depth, 'debug': opt.debug}
+
     if args:
-        execute_statement(' '.join(args))
+        execute_statement(' '.join(args), conf)
         sys.exit()
 
     c = FqlCmd()

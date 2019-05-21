@@ -9,6 +9,8 @@
 import os.path
 import glob
 import os
+import json
+import sys
 from collections import OrderedDict
 from print_utils import *
 from grammar_parser import parser
@@ -22,8 +24,9 @@ MODE_SELECT_AGGR = 2
 MODE_GROUP_AGGR = 3
 
 
-def execute_statement(stmt):
+def execute_statement(stmt, conf=None):
     stmts = parser.parse(stmt)
+    stmts.update(conf)
     execute(**stmts)
 
 # key word parameters:
@@ -58,6 +61,13 @@ def execute(**kwargs):
     o_stmt = kwargs.get('order')
     l_stmt = kwargs.get('limit')
     g_stmt = kwargs.get('group')
+
+    is_debug = kwargs.get('debug')
+    max_depth = kwargs.get('depth')
+
+    if is_debug:
+        o = json.dumps(kwargs, indent=4, separators=(',', ':'), cls=OuputJsonEncoder)
+        print 'kwargs:', o
 
     show_fields = set([f for f in s_stmt['field']]) if 'field' in s_stmt else set()
     accu_funcs = s_stmt['aggregate'] if 'aggregate' in s_stmt else {}
@@ -182,3 +192,8 @@ def _group_order_cmp(order_keys):
     return inner_cmp
 
 
+class OuputJsonEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, type(_group_order_cmp)):
+            return '%s.%s' % (obj.__module__, obj.func_name)
+        return json.JSONEncoder.default(self, obj)
