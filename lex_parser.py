@@ -40,7 +40,6 @@ reserved = {
     'minute': 'MINUTE',
     'hour': 'HOUR',
     'day': 'DAY',
-    'week': 'WEEK',
     'month': 'MONTH',
     'year': 'YEAR'
 }
@@ -90,7 +89,6 @@ t_FTYPE = r'(ftype)|(FTYPE)'
 t_MINUTE = r'(minute)|(MINUTE)'
 t_HOUR = r'(hour)|(HOUR)'
 t_DAY = r'(day)|(DAY)'
-t_WEEK = r'(week)|(WEEK)'
 t_MONTH = r'(month)|(MONTH)'
 t_YEAR = r'(year)|(YEAR)'
 t_ignore = ' \t\n'
