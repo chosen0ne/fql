@@ -94,10 +94,10 @@ def execute(**kwargs):
         g_stmt = {'dimension_aggr': OrderedDict({'*': lambda a: '*'})}
 
     g_stmt['accu_funcs'] = accu_funcs
-    g_stmt['order_accu_funcs'] = o_stmt['aggregations']
+    g_stmt['order_accu_funcs'] = o_stmt['aggregations'] if o_stmt else None
 
     groupby = GroupBy(**g_stmt)
-    if dim_fields != groupby.get_dim_name():
+    if query_mode == MODE_GROUP_AGGR and dim_fields != groupby.get_dim_name():
         raise Exception('Dimensions in select and group by are different, select: %s, group by: %s' \
                 % (dim_fields, groupby.get_dim_name()))
 

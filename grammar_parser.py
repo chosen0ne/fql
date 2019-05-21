@@ -28,10 +28,13 @@ grammar:
               | statement limit_statement
               | statement group_by_statement
 
-    select_statement : fields_select_stmt
-                     | accu_func_stmt
-                     | accu_func_stmt ',' group_func_factor
-                     | group_func_factor ',' accu_func_stmt
+    select_statement : select_factor
+                     | select_statement ',' select_factor
+
+    select_factor : a_field
+                  | '*'
+                  | accu_func_factor
+                  | group_func_factor
 
     from_statement : FROM FNAME
 
@@ -54,20 +57,14 @@ grammar:
                | CTIME
                | SIZE
 
-    fields_select_stmt : fields_select_stmt ','  a_field
-                       | a_field
-                       | '*'
+    accu_func : AVG
+              | MAX
+              | MIN
+              | SUM
 
-    accu_func_stmt : AVG '(' accu_field ')'
-                   | MAX '(' accu_field ')'
-                   | MIN '(' accu_field ')'
-                   | COUNT '(' '*' ')'
-                   | SUM '(' '*' ')'
-                   | accu_func_stmt ',' AVG '(' accu_field ')'
-                   | accu_func_stmt ',' MAX '(' accu_field ')'
-                   | accu_func_stmt ',' MIN '(' accu_field ')'
-                   | accu_func_stmt ',' COUNT '(' '*' ')'
-                   | accu_func_stmt ',' SUM '(' SIZE ')'
+    accu_func_factor : accu_func '(' accu_field ')'
+                     | COUNT '(' accu_field ')'
+                     | COUNT '(' '*' ')'
 
     condition_statement : condition_statement OR and_condition
                         | and_condition
@@ -118,7 +115,7 @@ grammar:
                  | ATIME NE datetime_factor
 
     order_sub_factor : a_field
-                     | accu_func_stmt
+                     | accu_func_factor
                      | group_func_factor
 
     order_factor : order_sub_factor
@@ -144,12 +141,12 @@ grammar:
     having_and_factor : having_and_factor AND having_factor
                       | having_factor
 
-    having_factor : accu_func_stmt '=' NUMBER
-                  | accu_func_stmt NE NUMBER
-                  | accu_func_stmt '>' NUMBER
-                  | accu_func_stmt GE NUMBER
-                  | accu_func_stmt '<' NUMBER
-                  | accu_func_stmt LE NUMBER
+    having_factor : accu_func_factor '=' NUMBER
+                  | accu_func_factor NE NUMBER
+                  | accu_func_factor '>' NUMBER
+                  | accu_func_factor GE NUMBER
+                  | accu_func_factor '<' NUMBER
+                  | accu_func_factor LE NUMBER
                   | '(' having_condition ')'
                   | NOT having_factor
 
@@ -158,10 +155,6 @@ grammar:
 
 '''
 
-# precedence = (
-#         ('left', 'NUMBER'),
-#         ('left', ',')
-# )
 
 # used to compare file stats, such as st_size, st_ctime, st_atime...
 fstat_cmp_operators = {
@@ -220,6 +213,18 @@ def check_group_stmt(stmts, group_stmt):
         raise Exception('\'limit\' must be used behind \'group by\'')
 
 
+def check_select_stmt(stmts):
+    if not 'select' in stmts:
+        return
+
+    select_stmt = stmts['select']
+    if 'field' in select_stmt and 'aggregations' in select_stmt:
+        raise Exception('fields and aggregations can\'t be selected at the same time')
+
+    if 'field' in select_stmt and 'dimension_aggr' in select_stmt:
+        raise Exception('fields and dimension can\'t be selected at the same time')
+
+
 def p_statement(p):
     '''
         statement : SELECT select_statement from_statement where_statement
@@ -271,41 +276,42 @@ def p_statement(p):
 
             stmts['group'] = p[2][1]
 
+    check_select_stmt(stmts)
 
 def p_select_stmt(p):
     '''
-        select_statement : fields_select_stmt
-                         | accu_func_stmt
-                         | accu_func_stmt ',' group_func_factor
-                         | group_func_factor ',' accu_func_stmt
+        select_statement : select_factor
+                         | select_statement ','  select_factor
     '''
-    # format of p[0]: ('select', ('field', [])), ('select', ('accu', [])), ('group_aggr', {'key', 'fn'})
-    p[0] = ('select', {})
-
-    d = p[0][1]
-    d[p[1][0]] = p[1][1]
-
-    if len(p) == 4:
-        d[p[3][0]] = p[3][1]
-
-
-def p_fields_select_stmt(p):
-    '''
-        fields_select_stmt : fields_select_stmt ','  a_field
-                           | a_field
-                           | '*'
-    '''
-    if isinstance(p[1], tuple):
-        # fields_select_stmt : fields_select_stmt ',' a_field
+    if p[1][0] == 'select':
         p[0] = p[1]
     else:
-        p[0] = ('field', [])
+        p[0] = ('select', OrderedDict())
 
-    fields = p[0][1]
-    if len(p) == 4:
-        fields.append(p[3])
-    elif len(p) == 2:
-        fields.append(p[1])
+    d = p[0][1]
+    factor_idx = 1 if len(p) == 2 else 3
+
+    t, (field, func) = p[factor_idx]
+    if not t in d:
+        d[t] = OrderedDict()
+
+    if field in d[t]:
+        raise Exception('Duplicated fields in select, field: %s', field)
+
+    d[t][field] = func
+
+
+def p_select_factor(p):
+    '''
+        select_factor : a_field
+                      | '*'
+                      | accu_func_factor
+                      | group_func_factor
+    '''
+    if isinstance(p[1], str):
+        p[0] = ('field', (p[1], 1))
+    else:
+        p[0] = p[1]
 
 
 def p_a_field(p):
@@ -329,46 +335,35 @@ def p_accu_field(p):
     p[0] = p[1]
 
 
-def p_accu_func_stmt1(p):
+def p_accu_func(p):
     '''
-        accu_func_stmt : AVG '(' accu_field ')'
-                       | MAX '(' accu_field ')'
-                       | MIN '(' accu_field ')'
-                       | COUNT '(' '*' ')'
-                       | SUM '(' SIZE ')'
+        accu_func : AVG
+                  | MAX
+                  | MIN
+                  | SUM
     '''
-    f = p[3].lower()
-    op = p[1]
-    accu_obj_name = op[0].upper() + op[1:].lower() + 'FuncCls'
+    p[0] = p[1].lower()
+
+
+def p_accu_func_factor(p):
+    '''
+        accu_func_factor : accu_func '(' accu_field ')'
+                         | COUNT '(' accu_field ')'
+                         | COUNT '(' '*' ')'
+    '''
+    fn_idx, field_idx = 1, 3
+
+    field = p[field_idx].lower()
+    fn = p[fn_idx]
+
+    if fn == 'sum' and field != 'size':
+        raise Exception('\'sum\' can only be operated on \'size\'')
+
+    accu_obj_name = '%s%sFuncCls' % (fn[0].upper(), fn[1:].lower())
     accu_obj = accu_func.__dict__[accu_obj_name]
-    func_key = '%s(%s)' % (op, p[3])
-    # fns = OrderedDict([(func_key.lower(), accu_obj(f))])
-    fns = OrderedDict([(func_key.lower(), lambda: accu_obj(f))])
-    p[0] = ('aggregations', fns)
+    fn_key = '%s(%s)' % (fn, field)
 
-
-def p_accu_func_stmt2(p):
-    '''
-        accu_func_stmt : accu_func_stmt ',' AVG '(' accu_field ')'
-                       | accu_func_stmt ',' MAX '(' accu_field ')'
-                       | accu_func_stmt ',' MIN '(' accu_field ')'
-                       | accu_func_stmt ',' COUNT '(' '*' ')'
-                       | accu_func_stmt ',' SUM '(' SIZE ')'
-    '''
-
-    p[0] = p[1]
-
-    fns = p[0][1]
-    f = p[5].lower()
-    op = p[3]
-    accu_obj_name = op[0].upper() + op[1:].lower() + 'FuncCls'
-    accu_obj = accu_func.__dict__[accu_obj_name]
-
-    func_key = '%s(%s)' % (op, p[5])
-    if func_key in fns:
-        raise Exception('Duplicated aggregation function, func: %s', func_key)
-
-    fns[func_key] = lambda: accu_obj(f)
+    p[0] = ('aggregations', (fn_key, lambda: accu_obj(field)))
 
 
 def p_from_stmt(p):
@@ -509,10 +504,10 @@ def p_order_statement(p):
 
     orders = p[0][1]['fields']
 
-    for f, ad in p[3]['fields']:
-        if f in orders:
-            raise Exception('Duplicated field of ORDER BY, field: %s' % f)
-        orders[f] = ad
+    f, ad = p[3]['field']
+    if f in orders:
+        raise Exception('Duplicated field of ORDER BY, field: %s' % f)
+    orders[f] = ad
 
     if 'aggregations' in p[3]:
         p[0][1]['aggregations'].update(p[3]['aggregations'])
@@ -521,19 +516,21 @@ def p_order_statement(p):
 def p_order_sub_factor(p):
     '''
         order_sub_factor : a_field
-                         | accu_func_stmt
+                         | accu_func_factor
                          | group_func_factor
     '''
     # p[0]:
-    #   - fields: list of fields
+    #   - field: a field
     #   - aggregations: only valid when order by aggregation function
     p[0] = {}
     if isinstance(p[1], str):
-        p[0]['fields'] = [p[1]]
+        p[0]['field'] = p[1]
     else:
-        p[0]['fields'] = p[1][1].keys()
-        if p[1][0] == 'aggregations':
-            p[0]['aggregations'] = p[1][1]
+        t, fn = p[1]
+        # fn is a tuple: (key, fn)
+        p[0]['field'] = fn[0]
+        if t == 'aggregations':
+            p[0]['aggregations'] = {fn[0]: fn[1]}
 
 
 def p_order_factor(p):
@@ -542,20 +539,13 @@ def p_order_factor(p):
                      | order_sub_factor ASC
                      | order_sub_factor DESC
     '''
-    # fields: [(field_name, asc/desc)*]
-    p[0] = {'fields': []}
-    fields = p[0]['fields']
+    # field: (field_name, asc/desc)
+    p[0] = {}
     if 'aggregations' in p[1]:
         p[0]['aggregations'] = p[1]['aggregations']
-    if len(p) == 2:
-        fields.extend([(f, 'asc') for f in p[1]['fields']])
-    else:
-        # 'max(ctime), count(*) asc' will be pared to
-        #       order_sub_factor ASC
-        # p[1] = {'fields': ['max(ctime)', 'count(*)'], 'aggregations': ..}
-        # ASC or DESC need to be added to the last element
-        fields.extend([(f, 'asc') for f in p[1]['fields'][:-1]])
-        fields.append((p[1]['fields'][-1], p[2].lower() if len(p) == 3 else 'asc'))
+
+    ad = 'asc' if len(p) == 2 else p[2].lower()
+    p[0]['field'] = (p[1]['field'], ad)
 
 
 def p_limit_statement(p):
@@ -592,9 +582,9 @@ def p_group_func_factor(p):
     if len(p) == 5:
         k = '%s(%s)' % (p[1].lower(), p[3])
         fn = time_aggregate_operators[p[1].lower()]
-        p[0] = ('dimension_aggr', OrderedDict({k: fn('st_' + p[3])}))
+        p[0] = ('dimension_aggr', (k, fn('st_' + p[3])))
     else:
-        p[0] = ('dimension_aggr', OrderedDict({'ftype': ftype_aggregate_operator}))
+        p[0] = ('dimension_aggr', ('ftype', ftype_aggregate_operator))
 
 
 def p_having_statement(p):
@@ -609,12 +599,11 @@ def p_having_condition(p):
         having_condition : having_condition OR having_and_factor
                          | having_and_factor
     '''
-    if len(p) == 2:
-        p[0] = p[1]
-    else:
-        p[1]['aggregations'].update(p[3]['aggregations'])
-        p[0] = {'aggregations': p[1],
-                'fn': lambda having_data: p[1]['fn'](having_data) or p[3]['fn'](having_data)}
+    p[0] = p[1]
+    if len(p) == 4:
+        p[0]['aggregations'].update(p[3]['aggregations'])
+        fn1, fn2 = p[1]['fn'], p[3]['fn']
+        p[0]['fn'] = lambda having_data: fn1(having_data) or fn2(having_data)
 
 
 def p_having_and_factor(p):
@@ -622,22 +611,21 @@ def p_having_and_factor(p):
         having_and_factor : having_and_factor AND having_factor
                           | having_factor
     '''
-    if len(p) == 2:
-        p[0] = p[1]
-    else:
-        p[1]['aggregations'].update(p[3]['aggregations'])
-        p[0] = {'aggregations': p[1],
-                'fn': lambda having_data: p[1]['fn'](having_data) and p[3]['fn'](having_data)}
+    p[0] = p[1]
+    if len(p) == 4:
+        p[0]['aggregations'].update(p[3]['aggregations'])
+        fn1, fn2 = p[1]['fn'], p[3]['fn']
+        p[0]['fn'] = lambda having_data: fn1(having_data) and fn2(having_data)
 
 
 def p_having_factor(p):
     '''
-        having_factor : accu_func_stmt '=' NUMBER
-                      | accu_func_stmt NE NUMBER
-                      | accu_func_stmt '>' NUMBER
-                      | accu_func_stmt GE NUMBER
-                      | accu_func_stmt '<' NUMBER
-                      | accu_func_stmt LE NUMBER
+        having_factor : accu_func_factor '=' NUMBER
+                      | accu_func_factor NE NUMBER
+                      | accu_func_factor '>' NUMBER
+                      | accu_func_factor GE NUMBER
+                      | accu_func_factor '<' NUMBER
+                      | accu_func_factor LE NUMBER
                       | '(' having_condition ')'
                       | NOT having_factor
     '''
@@ -647,18 +635,16 @@ def p_having_factor(p):
     elif len(p) == 3:
         # having_factor : NOT having_factor
         p[0] = p[2]
-        p[0]['fn'] = lambda having_data: not p[0]['fn']
+        fn = p[0]['fn']
+        p[0]['fn'] = lambda having_data: not fn(having_data)
     else:
         _, val, op, num = p
-        if len(val[1]) != 1:
-            raise Exception('Only 1 aggregation function is supported for comparision, funcs:',
-                            [v for v, _ in val[1].items()])
 
         # aggregations: OrderedDict(aggregation_func_key -> AccuFuncCls)
-        p[0] = {'aggregations': p[1][1]}
+        p[0] = {'aggregations': OrderedDict([p[1][1]])}
 
         # only has one key
-        aggr_func_key = p[1][1].keys()[0]
+        aggr_func_key = p[1][1][0]
 
         if op == '=':
             p[0]['fn'] = lambda having_data: having_data[aggr_func_key] == num
@@ -692,7 +678,7 @@ def p_group_by_statemennt(p):
     p[0] = ('group', {})
 
     g = p[0][1]
-    g['dimension_aggr'] = p[3][1]
+    g['dimension_aggr'] = OrderedDict([p[3][1]])
     if len(p) == 5:
         g['having'] = p[4]
 
