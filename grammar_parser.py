@@ -287,23 +287,6 @@ def p_select_stmt(p):
 
     if len(p) == 4:
         d[p[3][0]] = p[3][1]
-    # aggr_func_idx = 1 if p[1][0] == 'aggregate' else 3
-    # # format of aggregation functions:
-    # #   ('aggregate', OrderedDict([(max_st_size, MaxAccFuncCls), (min_st_ctime, MinAccFuncCls)])
-    # #       transmit to
-    # #   ('aggregate', [MaxAccFuncCls, MinAccFuncCls])
-    # aggr_funcs = [v for _, v in p[aggr_func_idx][1].items()]
-
-    # if len(p) == 2:
-    #     p[0] = ('select', p[1])
-
-    # if len(p) == 4:
-    #     if p[1][0] == 'group_aggr':
-    #         aggr_funcs.insert(0, p[1][1]['key'])
-    #     else:
-    #         aggr_funcs.append(p[1][1]['key'])
-
-    # p[0] = ('select', aggr_funcs)
 
 
 def p_fields_select_stmt(p):
@@ -361,7 +344,7 @@ def p_accu_func_stmt1(p):
     func_key = '%s(%s)' % (op, p[3])
     # fns = OrderedDict([(func_key.lower(), accu_obj(f))])
     fns = OrderedDict([(func_key.lower(), lambda: accu_obj(f))])
-    p[0] = ('aggregate', fns)
+    p[0] = ('aggregations', fns)
 
 
 def p_accu_func_stmt2(p):
@@ -519,18 +502,20 @@ def p_order_statement(p):
         order_statement : ORDER BY order_factor
                         | order_statement ',' order_factor
     '''
-    # list of tuple(field, asc/desc)
-    if isinstance(p[1], tuple):
-        p[0] = p[1]
+    if isinstance(p[1], str):
+        p[0] = ('order', {'fields': OrderedDict(), 'aggregations': {}})
     else:
-        p[0] = ('order', OrderedDict())
+        p[0] = p[1]
 
-    orders = p[0][1]
+    orders = p[0][1]['fields']
 
-    for f, ad in p[3]:
+    for f, ad in p[3]['fields']:
         if f in orders:
             raise Exception('Duplicated field of ORDER BY, field: %s' % f)
         orders[f] = ad
+
+    if 'aggregations' in p[3]:
+        p[0][1]['aggregations'].update(p[3]['aggregations'])
 
 
 def p_order_sub_factor(p):
@@ -539,11 +524,16 @@ def p_order_sub_factor(p):
                          | accu_func_stmt
                          | group_func_factor
     '''
-    # return a list of fields
+    # p[0]:
+    #   - fields: list of fields
+    #   - aggregations: only valid when order by aggregation function
+    p[0] = {}
     if isinstance(p[1], str):
-        p[0] = [p[1]]
+        p[0]['fields'] = [p[1]]
     else:
-        p[0] = p[1][1].keys()
+        p[0]['fields'] = p[1][1].keys()
+        if p[1][0] == 'aggregations':
+            p[0]['aggregations'] = p[1][1]
 
 
 def p_order_factor(p):
@@ -552,17 +542,20 @@ def p_order_factor(p):
                      | order_sub_factor ASC
                      | order_sub_factor DESC
     '''
-    # [(field_name, asc/desc)*]
-    p[0] = []
+    # fields: [(field_name, asc/desc)*]
+    p[0] = {'fields': []}
+    fields = p[0]['fields']
+    if 'aggregations' in p[1]:
+        p[0]['aggregations'] = p[1]['aggregations']
     if len(p) == 2:
-        p[0].extend([(f, 'asc') for f in p[1]])
+        fields.extend([(f, 'asc') for f in p[1]['fields']])
     else:
         # 'max(ctime), count(*) asc' will be pared to
         #       order_sub_factor ASC
-        # p[1] = ['max(ctime)', 'count(*)']
+        # p[1] = {'fields': ['max(ctime)', 'count(*)'], 'aggregations': ..}
         # ASC or DESC need to be added to the last element
-        p[0].extend([(f, 'asc') for f in p[1][:-1]])
-        p[0].append((p[1][-1], p[2].lower() if len(p) == 3 else 'asc'))
+        fields.extend([(f, 'asc') for f in p[1]['fields'][:-1]])
+        fields.append((p[1]['fields'][-1], p[2].lower() if len(p) == 3 else 'asc'))
 
 
 def p_limit_statement(p):

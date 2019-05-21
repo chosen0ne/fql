@@ -32,7 +32,7 @@ def execute_statement(stmt, conf=None):
 # key word parameters:
 #   - select(dict{str -> object}): select the fields to be return
 #       - 'field' -> list of str: fields will be selected
-#       - 'aggregate' -> OrderedDict{str -> AccuFuncCls func()}
+#       - 'aggregations' -> OrderedDict{str -> AccuFuncCls func()}
 #           - aggregation name on field -> aggregation function creator
 #               - max(size) -> lambda
 #       - 'dimension_aggr' -> OrderedDict{str -> str func(finfo{'name', 'stat'})}
@@ -70,7 +70,7 @@ def execute(**kwargs):
         print 'kwargs:', o
 
     show_fields = set([f for f in s_stmt['field']]) if 'field' in s_stmt else set()
-    accu_funcs = s_stmt['aggregate'] if 'aggregate' in s_stmt else {}
+    accu_funcs = s_stmt['aggregations'] if 'aggregations' in s_stmt else {}
     dim_fields = '&'.join([k for k in s_stmt['dimension_aggr'].keys()]) \
             if 'dimension_aggr' in s_stmt else None
 
@@ -94,6 +94,7 @@ def execute(**kwargs):
         g_stmt = {'dimension_aggr': OrderedDict({'*': lambda a: '*'})}
 
     g_stmt['accu_funcs'] = accu_funcs
+    g_stmt['order_accu_funcs'] = o_stmt['aggregations']
 
     groupby = GroupBy(**g_stmt)
     if dim_fields != groupby.get_dim_name():
@@ -118,7 +119,7 @@ def execute(**kwargs):
             order_fn = _group_order_cmp
 
     if order_fn:
-        rows.sort(order_fn(o_stmt))
+        rows.sort(order_fn(o_stmt['fields']))
 
     if query_mode != MODE_SELECT_AGGR and l_stmt:
         s, c = (0, l_stmt[0]) if len(l_stmt) == 1 else l_stmt
@@ -129,7 +130,7 @@ def execute(**kwargs):
     elif query_mode == MODE_SELECT_AGGR:
         printer = AggregatePrinter(f_stmt, rows)
     elif query_mode == MODE_GROUP_AGGR:
-        printer = GroupPrinter(rows, groupby.get_dim_name(), groupby.get_accu_func())
+        printer = GroupPrinter(rows, groupby.get_dim_name(), accu_funcs)
 
     printer.print_table()
 

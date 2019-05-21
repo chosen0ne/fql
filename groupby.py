@@ -16,18 +16,20 @@ class GroupBy(object):
         # dict: dimension name -> str func(finfo{'name', {'stat'}})
         # support multiple dimensions
         self._dimensions = kwargs.get('dimension_aggr')
+        order_accu_funcs = kwargs.get('order_accu_funcs', {})
+
+        # list of AccuFuncCls
+        self._accu_func_creators = accu_funcs.values()
 
         if having:
-            having_aggr = having['aggregations']
-            for k, v in having_aggr.items():
-                if not k in accu_funcs:
-                    accu_funcs[k] = v
+            self._accu_func_creators.extend(having['aggregations'].values())
             selector = having['fn']
         else:
             selector = None
 
-        # list of AccuFuncCls
-        self._accu_func_creators = accu_funcs.values()
+        if order_accu_funcs:
+            self._accu_func_creators.extend(order_accu_funcs.values())
+
         # func: boolean func(accu_result)
         # accu_result is value of aggregations
         self._accu_selector = selector

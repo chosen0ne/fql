@@ -145,7 +145,7 @@ class AggregatePrinter(Printer):
 class GroupPrinter(Printer):
     def __init__(self, dim_rows, dim_name, accu_fns):
         self._fields = [dim_name]
-        self._fields.extend([f.key() for f in accu_fns])
+        self._fields.extend([f().key() for f in accu_fns.values()])
 
         self._rows = []
         # dim_rows is a list of dict{str -> str / AccuFuncCls}
