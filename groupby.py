@@ -64,16 +64,14 @@ class GroupBy(object):
         '''
             return list of dict{aggre func key -> AccuFuncCls}
         '''
-        rows = self._dimension_accufuncs
-        if self._accu_selector:
-            # execute having clause
-            ret = []
-            for d, acc_vals in self._dimension_accufuncs.items():
-                if self._accu_selector(dict([(a.key(), a.val()) for a in acc_vals.values()])):
-                    acc_vals[self._dim_name] = d
-                    ret.append(acc_vals)
+        rows = []
+        for d, acc_vals_row in self._dimension_accufuncs.items():
+            if not self._accu_selector or \
+                    self._accu_selector(dict([(a.key(), a.val()) for a in acc_vals_row.values()])):
+                acc_vals_row[self._dim_name] = d
+                rows.append(acc_vals_row)
 
-        return ret
+        return rows
 
 
     def get_accu_func(self):
