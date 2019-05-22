@@ -76,6 +76,7 @@ grammar:
     factor : name_factor
            | size_factor
            | time_factor
+           | alias_factor
            | '(' condition_statement ')'
            | NOT factor
 
@@ -99,6 +100,9 @@ grammar:
                | ATIME
 
     time_factor : time_field cmp_op_sub_factor datetime_factor
+
+    alias_factor : FNAME cmp_op_sub_factor NUMBER
+                 | FNAME cmp_op_sub_factor datetime_factor
 
     order_sub_factor : a_field
                      | accu_func_factor
@@ -138,15 +142,37 @@ grammar:
 
 '''
 
+def fstat_cmp_op(f, val, op):
+    def fstat_cmp(finfo, alias=None):
+        field = alias['from_alias'][f] if alias and f in alias['from_alias'] else f
+
+        stat = int(getattr(finfo['stat'], 'st_' + field))
+        if op == '=':
+            return stat == val
+        elif op == '>':
+            return stat > val
+        elif op == '<':
+            return stat < val
+        elif op == '!=':
+            return stat != val
+        elif op == '>=':
+            return stat >= val
+        elif op == '<=':
+            return stat <= val
+        else:
+            raise Exception('Unsupport operator')
+
+    return fstat_cmp
+
 
 # used to compare file stats, such as st_size, st_ctime, st_atime...
 fstat_cmp_operators = {
-        '=': lambda field, val: lambda finfo: int(getattr(finfo['stat'], field)) == val,
-        '>': lambda field, val: lambda finfo: int(getattr(finfo['stat'], field)) > val,
-        '<': lambda field, val: lambda finfo: int(getattr(finfo['stat'], field)) < val,
-        '!=': lambda field, val: lambda finfo: int(getattr(finfo['stat'], field)) != val,
-        '>=': lambda field, val: lambda finfo: int(getattr(finfo['stat'], field)) >= val,
-        '<=': lambda field, val: lambda finfo: int(getattr(finfo['stat'], field)) <= val
+        '=': lambda field, val: fstat_cmp_op(field, val, '='),
+        '>': lambda field, val: fstat_cmp_op(field, val, '>'),
+        '<': lambda field, val: fstat_cmp_op(field, val, '<'),
+        '!=': lambda field, val: fstat_cmp_op(field, val, '!='),
+        '>=': lambda field, val: fstat_cmp_op(field, val, '>='),
+        '<=': lambda field, val: fstat_cmp_op(field, val, '<='),
 }
 
 
@@ -376,7 +402,7 @@ def p_where_stmt(p):
 def p_condition_stmt1(p):
     'condition_statement : condition_statement OR and_condition'
     p1, p2 = p[1], p[3]
-    p[0] = lambda finfo: p1(finfo) or p2(finfo)
+    p[0] = lambda finfo, alias: p1(finfo, alias) or p2(finfo, alias)
 
 
 def p_condition_stmt2(p):
@@ -387,7 +413,7 @@ def p_condition_stmt2(p):
 def p_and_condition1(p):
     'and_condition : and_condition AND factor'
     p1, p2 = p[1], p[3]
-    p[0] = lambda finfo: p1(finfo) and p2(finfo)
+    p[0] = lambda finfo, alias: p1(finfo, alias) and p2(finfo, alias)
 
 
 def p_and_condition2(p):
@@ -400,6 +426,7 @@ def p_factor(p):
         factor : name_factor
                | size_factor
                | time_factor
+               | alias_factor
                | '(' condition_statement ')'
                | NOT factor
     '''
@@ -407,7 +434,7 @@ def p_factor(p):
         p[0] = p[1]
     elif len(p) == 3:
         p1 = p[2]
-        p[0] = lambda finfo: not p1(finfo)
+        p[0] = lambda finfo, alias: not p1(finfo, alias)
     elif len(p) == 4:
         p[0] = p[2]
 
@@ -419,12 +446,12 @@ def p_name_factor(p):
     '''
     _, _, op, _, fname, _ = p
     if op == '=':
-        p[0] = lambda finfo: finfo['name'] == fname
+        p[0] = lambda finfo, alias: finfo['name'] == fname
     else:
         fname = fname.replace('.', '\.')
         fname = fname.replace('%', '.*')
         pattern = re.compile(fname)
-        p[0] = lambda finfo: pattern.match(finfo['name']) is not None
+        p[0] = lambda finfo, alias: pattern.match(finfo['name']) is not None
 
 
 def p_num_cmp_sub_factor(p):
@@ -445,7 +472,7 @@ def p_size_factor(p):
     '''
     _, _, op, fsize = p
     cmp_func = fstat_cmp_operators[op]
-    p[0] = cmp_func('st_size', fsize)
+    p[0] = cmp_func('size', fsize)
 
 
 def p_datetime_factor(p):
@@ -473,6 +500,19 @@ def p_time_factor(p):
         time_factor : time_field cmp_op_sub_factor datetime_factor
     '''
     time_proc(p)
+
+
+def p_alias_factor(p):
+    '''
+        alias_factor : FNAME cmp_op_sub_factor NUMBER
+                     | FNAME cmp_op_sub_factor datetime_factor
+    '''
+    _, f, op, val = p
+    cmp_func = fstat_cmp_operators[op]
+    if not isinstance(val, int):
+        val = time.mktime(val.timetuple())
+
+    p[0] = cmp_func(f, val)
 
 
 def p_order_statement(p):
@@ -676,7 +716,7 @@ def p_group_by_statemennt(p):
 def time_proc(p):
     _, field_name, op, d = p
     d = time.mktime(d.timetuple())
-    field_name = 'st_' + field_name.lower()
+    field_name = field_name.lower()
 
     cmp_func = fstat_cmp_operators[op]
     p[0] = cmp_func(field_name, d)

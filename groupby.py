@@ -97,3 +97,6 @@ class GroupBy(object):
     def get_dim_name(self):
         return self._dim_name
 
+    def get_aliases(self):
+        return self._aliases
+

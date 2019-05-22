@@ -57,7 +57,7 @@ def execute_statement(stmt, conf=None):
 def execute(**kwargs):
     s_stmt = kwargs.get('select', ('select', ['*']))
     f_stmt = kwargs.get('from', '.')
-    w_stmt = kwargs.get('where', lambda finfo: True)
+    w_stmt = kwargs.get('where', lambda finfo, alias: True)
     o_stmt = kwargs.get('order')
     l_stmt = kwargs.get('limit')
     g_stmt = kwargs.get('group')
@@ -112,6 +112,12 @@ def execute(**kwargs):
     g_stmt['order_accu_funcs'] = o_stmt['aggregations'] if o_stmt else None
     g_stmt['aliases'] = aliases
 
+    if is_debug:
+        p = {'select': s_stmt, 'order': o_stmt, 'l_stmt': l_stmt,
+                'group': g_stmt, 'where': w_stmt}
+        o = json.dumps(p, indent=4, separators=(',', ':'), cls=OuputJsonEncoder)
+        print 'kwargs processed: ', o
+
     groupby = GroupBy(**g_stmt)
     if query_mode == MODE_GROUP_AGGR and dim_fields != groupby.get_dim_name():
         raise Exception('Dimensions in select and group by are different, select: %s, group by: %s' \
@@ -155,13 +161,13 @@ def execute(**kwargs):
 # @param selector(func: boolean selector(finfo))
 # @param printer(FieldPrinter)
 # @param files(list of finfo{'name', 'stat'})
-def travel_file_tree(start_point, selector, files, groupby=None):
+def travel_file_tree(start_point, selector, files, groupby):
     g = glob.glob(start_point + '/*')
     for f in g:
         statinfo = os.stat(f)
         fname = os.path.basename(f)
         finfo = {'name': fname, 'stat': statinfo}
-        if selector(finfo):
+        if selector(finfo, groupby.get_aliases()):
             files.append(finfo)
 
             groupby(finfo)
