@@ -148,11 +148,11 @@ def execute(**kwargs):
         rows = rows[s: s+c]
 
     if query_mode == MODE_SELECT_FIELDS:
-        printer = FieldPrinter(show_fields, rows)
+        printer = FieldPrinter(show_fields, rows, aliases)
     elif query_mode == MODE_SELECT_AGGR:
-        printer = AggregatePrinter(f_stmt, rows)
+        printer = AggregatePrinter(f_stmt, rows, aliases)
     elif query_mode == MODE_GROUP_AGGR:
-        printer = GroupPrinter(rows, groupby.get_dim_name(), accu_funcs)
+        printer = GroupPrinter(rows, groupby.get_dim_name(), accu_funcs, aliases)
 
     printer.print_table()
 
@@ -230,7 +230,6 @@ def aggregation_alias_replace(aliases, data_dict, aggr_funcs):
                 raise Exception('undefined aggregation alias for %s' % f)
             data_dict[dim_name] = aggr_funcs[dim_name]
             del(data_dict[f])
-
 
 
 class OuputJsonEncoder(json.JSONEncoder):

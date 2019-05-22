@@ -95,12 +95,13 @@ class Printer(object):
 
 
 class FieldPrinter(Printer):
-    def __init__(self, show_fields, files):
+    def __init__(self, show_fields, files, aliases):
         if len(show_fields) == 1 and '*' in show_fields:
             self._select_fields = ALL_FIELDS
         else:
             self._select_fields = map(lambda f: f.lower(), show_fields)
 
+        self._aliases = aliases
         self._rows = []
         for f in files:
             self._rows.append([self._fetch_val(field, f) for field in self._select_fields])
@@ -120,17 +121,22 @@ class FieldPrinter(Printer):
                 return self._fetch_size_val(val)
 
     def fields(self):
-        return self._select_fields
+        a = self._aliases
+        fields = map(lambda f: a['to_alias'][f] if a and f in a['to_alias'] else  f \
+                , self._select_fields)
+        return fields
 
     def rows(self):
         return self._rows
 
 
 class AggregatePrinter(Printer):
-    def __init__(self, from_dir, accu_funcs):
+    def __init__(self, from_dir, accu_funcs, aliases):
         self._rows = []
         for fn in accu_funcs.values():
-            field_name = '%s of %s' % (fn.key(), from_dir)
+            f = aliases['to_alias'][fn.key()] if aliases and fn.key() in aliases['to_alias'] \
+                    else fn.key()
+            field_name = '%s of %s' % (f, from_dir)
             if fn.fname():
                 field_name += ': ' + fn.fname()
 
@@ -143,9 +149,10 @@ class AggregatePrinter(Printer):
 
 
 class GroupPrinter(Printer):
-    def __init__(self, dim_rows, dim_name, accu_fns):
+    def __init__(self, dim_rows, dim_name, accu_fns, aliases):
         self._fields = [dim_name]
         self._fields.extend([f().key() for f in accu_fns.values()])
+        self._aliases = aliases
 
         self._rows = []
         # dim_rows is a list of dict{str -> str / AccuFuncCls}
@@ -165,7 +172,9 @@ class GroupPrinter(Printer):
             self._rows.append(r)
 
     def fields(self):
-        return self._fields
+        a = self._aliases
+        fields = map(lambda f: a['to_alias'][f] if a and f in a['to_alias'] else f, self._fields)
+        return fields
 
     def rows(self):
         return self._rows
