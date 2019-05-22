@@ -136,7 +136,8 @@ def t_error(t):
 lexer = lex.lex()
 
 if __name__ == '__main__':
-    stmt = 'select * from . where ctime < 2015-01-20 16:55:00 and name = \'test\' order by name asc'
+    stmt = 'select * from . where ctime < 2015-01-20 16:55:00 and '\
+           'name = \'test\' order by name asc'
     lexer.input(stmt)
     for t in lexer:
         print t

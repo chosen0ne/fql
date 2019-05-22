@@ -44,7 +44,7 @@ class GroupBy(object):
         dim_val = '&'.join([d(finfo) for d in self._dimensions.values()])
 
         dim_val.strip()
-        if not dim_val in self._dimension_accufuncs:
+        if dim_val not in self._dimension_accufuncs:
             self._dimension_accufuncs[dim_val] = OrderedDict()
             for f in self._accu_func_creators:
                 fn = f()
@@ -66,8 +66,9 @@ class GroupBy(object):
                         acc_vals_row[self._aliases['to_alias'][k]] = acc_fn
 
             if not self._accu_selector or \
-                    self._accu_selector(dict([(k, fn.val()) for k, fn in acc_vals_row.items()])):
-                rows[d] = acc_vals_row
+                    self._accu_selector(dict([(k, fn.val()) for k, fn in
+                                              acc_vals_row.items()])):
+                ret[d] = acc_vals_row
 
         return ret
 
@@ -84,12 +85,12 @@ class GroupBy(object):
                         acc_vals_row[self._aliases['to_alias'][k]] = acc_fn
 
             if not self._accu_selector or \
-                    self._accu_selector(dict([(k, fn.val()) for k, fn in acc_vals_row.items()])):
+                    self._accu_selector(dict([(k, fn.val()) for k, fn in
+                                              acc_vals_row.items()])):
                 acc_vals_row[self._dim_name] = d
                 rows.append(acc_vals_row)
 
         return rows
-
 
     def get_accu_func(self):
         return [f() for f in self._accu_func_creators]
@@ -99,4 +100,3 @@ class GroupBy(object):
 
     def get_aliases(self):
         return self._aliases
-

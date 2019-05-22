@@ -104,7 +104,8 @@ class FieldPrinter(Printer):
         self._aliases = aliases
         self._rows = []
         for f in files:
-            self._rows.append([self._fetch_val(field, f) for field in self._select_fields])
+            self._rows.append([self._fetch_val(field, f) for field in
+                              self._select_fields])
 
     def _fetch_val(self, field, finfo):
         fname = finfo['name']
@@ -122,8 +123,8 @@ class FieldPrinter(Printer):
 
     def fields(self):
         a = self._aliases
-        fields = map(lambda f: a['to_alias'][f] if a and f in a['to_alias'] else  f \
-                , self._select_fields)
+        fields = map(lambda f: a['to_alias'][f] if a and f in a['to_alias']
+                     else f, self._select_fields)
         return fields
 
     def rows(self):
@@ -134,13 +135,14 @@ class AggregatePrinter(Printer):
     def __init__(self, from_dir, accu_funcs, aliases):
         self._rows = []
         for fn in accu_funcs.values():
-            f = aliases['to_alias'][fn.key()] if aliases and fn.key() in aliases['to_alias'] \
-                    else fn.key()
+            f = aliases['to_alias'][fn.key()] if aliases and \
+                fn.key() in aliases['to_alias'] else fn.key()
             field_name = '%s of %s' % (f, from_dir)
             if fn.fname():
                 field_name += ': ' + fn.fname()
 
-            val = self._fetch_size_val(fn.val()) if fn.desp()[1] == 'size' else fn.val()
+            val = self._fetch_size_val(fn.val()) if fn.desp()[1] == 'size' \
+                else fn.val()
 
             self._rows.append((field_name, str(val)))
 
@@ -163,7 +165,8 @@ class GroupPrinter(Printer):
                 if isinstance(val, AccuFuncCls):
                     fn = val
                     t, f = fn.desp()
-                    val = self._fetch_size_val(fn.val()) if f == 'size' else str(fn.val())
+                    val = self._fetch_size_val(fn.val()) if f == 'size' else \
+                        str(fn.val())
                     if fn.fname():
                         val = val + ': ' + fn.fname()
 
@@ -173,7 +176,8 @@ class GroupPrinter(Printer):
 
     def fields(self):
         a = self._aliases
-        fields = map(lambda f: a['to_alias'][f] if a and f in a['to_alias'] else f, self._fields)
+        fields = map(lambda f: a['to_alias'][f] if a and f in a['to_alias']
+                     else f, self._fields)
         return fields
 
     def rows(self):

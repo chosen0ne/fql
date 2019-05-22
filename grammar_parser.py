@@ -142,9 +142,11 @@ grammar:
 
 '''
 
+
 def fstat_cmp_op(f, val, op):
     def fstat_cmp(finfo, alias=None):
-        field = alias['from_alias'][f] if alias and f in alias['from_alias'] else f
+        field = alias['from_alias'][f] if alias and f in alias['from_alias'] \
+            else f
 
         stat = int(getattr(finfo['stat'], 'st_' + field))
         if op == '=':
@@ -167,26 +169,26 @@ def fstat_cmp_op(f, val, op):
 
 # used to compare file stats, such as st_size, st_ctime, st_atime...
 fstat_cmp_operators = {
-        '=': lambda field, val: fstat_cmp_op(field, val, '='),
-        '>': lambda field, val: fstat_cmp_op(field, val, '>'),
-        '<': lambda field, val: fstat_cmp_op(field, val, '<'),
-        '!=': lambda field, val: fstat_cmp_op(field, val, '!='),
-        '>=': lambda field, val: fstat_cmp_op(field, val, '>='),
-        '<=': lambda field, val: fstat_cmp_op(field, val, '<='),
+    '=': lambda field, val: fstat_cmp_op(field, val, '='),
+    '>': lambda field, val: fstat_cmp_op(field, val, '>'),
+    '<': lambda field, val: fstat_cmp_op(field, val, '<'),
+    '!=': lambda field, val: fstat_cmp_op(field, val, '!='),
+    '>=': lambda field, val: fstat_cmp_op(field, val, '>='),
+    '<=': lambda field, val: fstat_cmp_op(field, val, '<='),
 }
 
 
 time_aggregate_operators = {
-        'minute': lambda field: lambda finfo: datetime.fromtimestamp(getattr(finfo['stat'], field))
-                .strftime('%Y-%m-%d %H:%M'),
-        'hour': lambda field: lambda finfo: datetime.fromtimestamp(getattr(finfo['stat'], field))
-                .strftime('%Y-%m-%d %H'),
-        'day': lambda field: lambda finfo: datetime.fromtimestamp(getattr(finfo['stat'], field))
-                .strftime('%Y-%m-%d'),
-        'month': lambda field: lambda finfo: datetime.fromtimestamp(getattr(finfo['stat'], field))
-                .strftime('%Y-%m'),
-        'year': lambda field: lambda finfo: datetime.fromtimestamp(getattr(finfo['stat'], field))
-                .strftime('%Y'),
+    'minute': lambda field: lambda finfo: datetime.fromtimestamp(
+        getattr(finfo['stat'], field)).strftime('%Y-%m-%d %H:%M'),
+    'hour': lambda field: lambda finfo: datetime.fromtimestamp(
+        getattr(finfo['stat'], field)).strftime('%Y-%m-%d %H'),
+    'day': lambda field: lambda finfo: datetime.fromtimestamp(
+        getattr(finfo['stat'], field)).strftime('%Y-%m-%d'),
+    'month': lambda field: lambda finfo: datetime.fromtimestamp(
+        getattr(finfo['stat'], field)).strftime('%Y-%m'),
+    'year': lambda field: lambda finfo: datetime.fromtimestamp(
+        getattr(finfo['stat'], field)).strftime('%Y'),
 }
 
 
@@ -198,8 +200,9 @@ def ftype_aggregate_operator(finfo):
 
 def check_order_stmt(stmts, order_stmt):
     if 'order' in stmts:
-        raise Exception('Duplicated order by, exists: order by %s, here: order by %s' %
-                        (stmts['order'].items(), order_stmt.items()))
+        raise Exception('Duplicated order by, exists: order by %s, here: order'
+                        ' by %s' % (stmts['order'].items(),
+                                    order_stmt.items()))
 
     if 'limit' in stmts:
         raise Exception('\'limit\' must be used behind \'order by\'')
@@ -223,15 +226,17 @@ def check_group_stmt(stmts, group_stmt):
 
 
 def check_select_stmt(stmts):
-    if not 'select' in stmts:
+    if 'select' not in stmts:
         return
 
     select_stmt = stmts['select']
     if 'field' in select_stmt and 'aggregations' in select_stmt:
-        raise Exception('fields and aggregations can\'t be selected at the same time')
+        raise Exception('fields and aggregations can\'t be selected at the'
+                        ' same time')
 
     if 'field' in select_stmt and 'dimension_aggr' in select_stmt:
-        raise Exception('fields and dimension can\'t be selected at the same time')
+        raise Exception('fields and dimension can\'t be selected at the'
+                        ' same time')
 
 
 def p_statement(p):
@@ -255,7 +260,8 @@ def p_statement(p):
 
     stmts = p[0]
     if len(p) == 5:
-        stmts['select'], stmts['from'], stmts['where'] = p[2][1], p[3][1], p[4][1]
+        stmts['select'], stmts['from'], stmts['where'] = \
+            p[2][1], p[3][1], p[4][1]
 
     elif len(p) == 4:
         stmt_type, stmt = p[2]
@@ -267,7 +273,8 @@ def p_statement(p):
 
     elif len(p) == 3:
         stmt_type, stmt = p[2]
-        if stmt_type == 'where' or stmt_type == 'select' or stmt_type == 'from':
+        if stmt_type == 'where' or stmt_type == 'select' or \
+                stmt_type == 'from':
             stmts[stmt_type] = stmt
         elif stmt_type == 'order':
             # statement : statement order_statement
@@ -287,6 +294,7 @@ def p_statement(p):
 
     check_select_stmt(stmts)
 
+
 def p_select_stmt(p):
     '''
         select_statement : select_factor
@@ -302,14 +310,14 @@ def p_select_stmt(p):
 
     t, factor = p[factor_idx]
     if t == 'alias':
-        if not 'alias' in d:
+        if 'alias' not in d:
             d['alias'] = {'from_alias': {}, 'to_alias': {}}
         d['alias']['from_alias'].update(factor['from_alias'])
         d['alias']['to_alias'].update(factor['to_alias'])
         t, factor = factor['factor']
 
     field, func = factor
-    if not t in d:
+    if t not in d:
         d[t] = OrderedDict()
 
     if field in d[t]:
@@ -329,9 +337,11 @@ def p_select_factor(p):
     if isinstance(p[1], str):
         p[0] = ('field', (p[1], 1))
     elif len(p) == 3:
-        alias = {'from_alias': {p[2]: p[1][1][0]},
-                'to_alias': {p[1][1][0]: p[2]},
-                'factor': p[1]}
+        alias = {
+            'from_alias': {p[2]: p[1][1][0]},
+            'to_alias': {p[1][1][0]: p[2]},
+            'factor': p[1]
+        }
         p[0] = ('alias', alias)
     else:
         p[0] = p[1]

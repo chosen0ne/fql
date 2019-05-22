@@ -10,9 +10,8 @@ import os.path
 import glob
 import os
 import json
-import sys
 from collections import OrderedDict
-from print_utils import *
+from print_utils import FieldPrinter, AggregatePrinter, GroupPrinter
 from grammar_parser import parser
 from groupby import GroupBy
 from accu_func import AccuFuncCls
@@ -29,32 +28,39 @@ def execute_statement(stmt, conf=None):
     stmts.update(conf)
     execute(**stmts)
 
-# key word parameters:
-#   - select(dict{str -> object}): select the fields to be return
-#       - 'field' -> list of str: fields will be selected
-#       - 'aggregations' -> OrderedDict{str -> AccuFuncCls func()}
-#           - aggregation name on field -> aggregation function creator
-#               - max(size) -> lambda
-#       - 'dimension_aggr' -> OrderedDict{str -> str func(finfo{'name', 'stat'})}
-#           - dimension aggregation name on field -> dimension fetch function
-#               - minute(atime) -> lambda / ftype -> lambda
-#   - from(str): directory to be query
-#   - where(boolean func(finfo{'name', 'stat'})): filter files base on name or file stats
-#   - order(OrderedDict{str -> str}): sort the result
-#       - field name -> 'asc' or 'desc'
-#   - limit(list of int): limit the count of result
-#       - [limit]
-#       - [limit, start]
-#   - group(dict{str -> OrderedDict}): group result by some dimensions
-#       - 'dimension_aggr' -> OrderedDict{str -> str func(finfo{'name', 'stat'})}
-#           - minute(atime) -> lambda / ftype -> lambda
-#       - 'having' -> dict{str -> object}
-#           - aggregations -> OrderedDict{str -> str func(finfo{'name', 'stat'})}
-#               - having on the aggregation function on fields
-#           - fn -> boolean func(dict{str -> val})
-#               - str -> val => aggregation function on field -> number
-#                   - max(size) -> 100
+
 def execute(**kwargs):
+    '''
+    key word parameters:
+    - select(dict{str -> object}): select the fields to be return
+        - 'field' -> list of str: fields will be selected
+        - 'aggregations' -> OrderedDict{str -> AccuFuncCls func()}
+            - aggregation name on field -> aggregation function creator
+                - max(size) -> lambda
+        - 'dimension_aggr' -> OrderedDict{str ->
+           str func(finfo{'name', 'stat'})}
+            - dimension aggregation name on field -> dimension fetch function
+                - minute(atime) -> lambda / ftype -> lambda
+    - from(str): directory to be query
+    - where(boolean func(finfo{'name', 'stat'})): filter files base on name or
+      file stats
+    - order(OrderedDict{str -> str}): sort the result
+        - field name -> 'asc' or 'desc'
+    - limit(list of int): limit the count of result
+        - [limit]
+        - [limit, start]
+    - group(dict{str -> OrderedDict}): group result by some dimensions
+        - 'dimension_aggr' -> OrderedDict{str ->
+          str func(finfo{'name', 'stat'})}
+            - minute(atime) -> lambda / ftype -> lambda
+        - 'having' -> dict{str -> object}
+            - aggregations -> OrderedDict{str ->
+              str func(finfo{'name', 'stat'})}
+                - having on the aggregation function on fields
+            - fn -> boolean func(dict{str -> val})
+                - str -> val => aggregation function on field -> number
+                    - max(size) -> 100
+    '''
     s_stmt = kwargs.get('select', ('select', ['*']))
     f_stmt = kwargs.get('from', '.')
     w_stmt = kwargs.get('where', lambda finfo, alias: True)
@@ -66,13 +72,15 @@ def execute(**kwargs):
     max_depth = kwargs.get('depth')
 
     if is_debug:
-        o = json.dumps(kwargs, indent=4, separators=(',', ':'), cls=OuputJsonEncoder)
+        o = json.dumps(kwargs, indent=4, separators=(',', ':'),
+                       cls=OuputJsonEncoder)
         print 'kwargs:', o
 
-    show_fields = set([f for f in s_stmt['field']]) if 'field' in s_stmt else set()
+    show_fields = set([f for f in s_stmt['field']]) if 'field' in s_stmt else \
+        set()
     accu_funcs = s_stmt['aggregations'] if 'aggregations' in s_stmt else {}
     dim_fields = '&'.join([k for k in s_stmt['dimension_aggr'].keys()]) \
-            if 'dimension_aggr' in s_stmt else None
+        if 'dimension_aggr' in s_stmt else None
     aliases = s_stmt['alias'] if 'alias' in s_stmt else None
 
     # replacement of alias
@@ -83,11 +91,13 @@ def execute(**kwargs):
 
         if g_stmt:
             group_fields = g_stmt['dimension_aggr']
-            aggregation_alias_replace(aliases['from_alias'], group_fields, s_stmt['dimension_aggr'])
+            aggregation_alias_replace(aliases['from_alias'], group_fields,
+                                      s_stmt['dimension_aggr'])
 
             if 'having' in g_stmt:
                 having_fields = g_stmt['having']['aggregations']
-                aggregation_alias_replace(aliases['from_alias'], having_fields, s_stmt['aggregations'])
+                aggregation_alias_replace(aliases['from_alias'], having_fields,
+                                          s_stmt['aggregations'])
 
     if show_fields:
         query_mode = MODE_SELECT_FIELDS
@@ -103,7 +113,8 @@ def execute(**kwargs):
         raise Exception('\'limit\' isn\'t supported in select aggregation')
 
     # use GroupBy to process group by aggragation or normal aggragation.
-    # When normal aggragation is executed, all the files is treated as in one group '*'
+    # When normal aggragation is executed, all the files is treated as in one
+    # group '*'
     if query_mode != MODE_GROUP_AGGR:
         # no group by, all the files are in one group
         g_stmt = {'dimension_aggr': OrderedDict({'*': lambda a: '*'})}
@@ -114,14 +125,16 @@ def execute(**kwargs):
 
     if is_debug:
         p = {'select': s_stmt, 'order': o_stmt, 'l_stmt': l_stmt,
-                'group': g_stmt, 'where': w_stmt}
-        o = json.dumps(p, indent=4, separators=(',', ':'), cls=OuputJsonEncoder)
+             'group': g_stmt, 'where': w_stmt}
+        o = json.dumps(p, indent=4, separators=(',', ':'),
+                       cls=OuputJsonEncoder)
         print 'kwargs processed: ', o
 
     groupby = GroupBy(**g_stmt)
     if query_mode == MODE_GROUP_AGGR and dim_fields != groupby.get_dim_name():
-        raise Exception('Dimensions in select and group by are different, select: %s, group by: %s' \
-                % (dim_fields, groupby.get_dim_name()))
+        raise Exception('Dimensions in select and group by are different, '
+                        'select: %s, group by: %s'
+                        % (dim_fields, groupby.get_dim_name()))
 
     # all the files matched to where condition
     files = []
@@ -152,7 +165,8 @@ def execute(**kwargs):
     elif query_mode == MODE_SELECT_AGGR:
         printer = AggregatePrinter(f_stmt, rows, aliases)
     elif query_mode == MODE_GROUP_AGGR:
-        printer = GroupPrinter(rows, groupby.get_dim_name(), accu_funcs, aliases)
+        printer = GroupPrinter(rows, groupby.get_dim_name(), accu_funcs,
+                               aliases)
 
     printer.print_table()
 
@@ -183,7 +197,8 @@ def _fields_order_cmp(order_keys):
             if k == 'name':
                 if a['name'] == b['name']:
                     continue
-                return cmp(a['name'], b['name']) if ad == 'asc' else cmp(b['name'], a['name'])
+                return cmp(a['name'], b['name']) if ad == 'asc' else \
+                    cmp(b['name'], a['name'])
             else:
                 vala = int(getattr(a['stat'], 'st_' + k))
                 valb = int(getattr(b['stat'], 'st_' + k))
@@ -226,7 +241,7 @@ def aggregation_alias_replace(aliases, data_dict, aggr_funcs):
     for f, data in data_dict.items():
         if f in aliases:
             dim_name = aliases[f]
-            if not aggr_funcs or not dim_name in aggr_funcs:
+            if not aggr_funcs or dim_name not in aggr_funcs:
                 raise Exception('undefined aggregation alias for %s' % f)
             data_dict[dim_name] = aggr_funcs[dim_name]
             del(data_dict[f])
