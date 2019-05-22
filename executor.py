@@ -138,7 +138,7 @@ def execute(**kwargs):
 
     # all the files matched to where condition
     files = []
-    travel_file_tree(f_stmt, w_stmt, files, groupby)
+    travel_file_tree(f_stmt, w_stmt, files, groupby, 1, max_depth)
 
     # fetch rows
     order_fn = None
@@ -175,7 +175,11 @@ def execute(**kwargs):
 # @param selector(func: boolean selector(finfo))
 # @param printer(FieldPrinter)
 # @param files(list of finfo{'name', 'stat'})
-def travel_file_tree(start_point, selector, files, groupby):
+def travel_file_tree(start_point, selector, files, groupby, cur_depth=1,
+                     max_depth=3):
+    if cur_depth > max_depth:
+        return
+
     g = glob.glob(start_point + '/*')
     for f in g:
         statinfo = os.stat(f)
@@ -187,7 +191,8 @@ def travel_file_tree(start_point, selector, files, groupby):
             groupby(finfo)
 
         if os.path.isdir(f):
-            travel_file_tree(f, selector, files, groupby)
+            travel_file_tree(f, selector, files, groupby, cur_depth+1,
+                             max_depth)
 
 
 def _fields_order_cmp(order_keys):
