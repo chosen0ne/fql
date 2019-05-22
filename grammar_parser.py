@@ -324,13 +324,13 @@ def p_select_factor(p):
                       | '*'
                       | accu_func_factor
                       | group_func_factor
-                      | select_factor AS FNAME
+                      | select_factor FNAME
     '''
     if isinstance(p[1], str):
         p[0] = ('field', (p[1], 1))
-    elif len(p) == 4:
-        alias = {'from_alias': {p[3]: p[1][1][0]},
-                'to_alias': {p[1][1][0]: p[3]},
+    elif len(p) == 3:
+        alias = {'from_alias': {p[2]: p[1][1][0]},
+                'to_alias': {p[1][1][0]: p[2]},
                 'factor': p[1]}
         p[0] = ('alias', alias)
     else:
