@@ -143,12 +143,15 @@ grammar:
     having_and_factor : having_and_factor AND having_factor
                       | having_factor
 
-    having_factor : accu_func_factor '=' NUMBER
-                  | accu_func_factor NE NUMBER
-                  | accu_func_factor '>' NUMBER
-                  | accu_func_factor GE NUMBER
-                  | accu_func_factor '<' NUMBER
-                  | accu_func_factor LE NUMBER
+    having_sub_factor : accu_func_factor
+                      | FNAME
+
+    having_factor : having_sub_factor '=' NUMBER
+                  | having_sub_factor NE NUMBER
+                  | having_sub_factor '>' NUMBER
+                  | having_sub_factor GE NUMBER
+                  | having_sub_factor '<' NUMBER
+                  | having_sub_factor LE NUMBER
                   | '(' having_condition ')'
                   | NOT having_factor
 
@@ -637,14 +640,25 @@ def p_having_and_factor(p):
         p[0]['fn'] = lambda having_data: fn1(having_data) and fn2(having_data)
 
 
+def p_having_sub_factor(p):
+    '''
+        having_sub_factor : accu_func_factor
+                          | FNAME
+    '''
+    if isinstance(p[1], str):
+        p[0] = ('alias', p[1])
+    else:
+        p[0] = p[1]
+
+
 def p_having_factor(p):
     '''
-        having_factor : accu_func_factor '=' NUMBER
-                      | accu_func_factor NE NUMBER
-                      | accu_func_factor '>' NUMBER
-                      | accu_func_factor GE NUMBER
-                      | accu_func_factor '<' NUMBER
-                      | accu_func_factor LE NUMBER
+        having_factor : having_sub_factor '=' NUMBER
+                      | having_sub_factor NE NUMBER
+                      | having_sub_factor '>' NUMBER
+                      | having_sub_factor GE NUMBER
+                      | having_sub_factor '<' NUMBER
+                      | having_sub_factor LE NUMBER
                       | '(' having_condition ')'
                       | NOT having_factor
     '''
@@ -659,11 +673,15 @@ def p_having_factor(p):
     else:
         _, val, op, num = p
 
-        # aggregations: OrderedDict(aggregation_func_key -> AccuFuncCls)
-        p[0] = {'aggregations': OrderedDict([p[1][1]])}
+        if val[0] == 'aggregations':
+            # aggregations: OrderedDict(aggregation_func_key -> AccuFuncCls)
+            p[0] = {'aggregations': OrderedDict([p[1][1]])}
 
-        # only has one key
-        aggr_func_key = p[1][1][0]
+            # only has one key
+            aggr_func_key = p[1][1][0]
+        else:
+            p[0] = {'aggregations': {p[1][1]: 1}}
+            aggr_func_key = p[1][1]
 
         if op == '=':
             p[0]['fn'] = lambda having_data: having_data[aggr_func_key] == num

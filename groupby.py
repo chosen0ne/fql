@@ -16,6 +16,7 @@ class GroupBy(object):
         # dict: dimension name -> str func(finfo{'name', {'stat'}})
         # support multiple dimensions
         self._dimensions = kwargs.get('dimension_aggr')
+        self._aliases = kwargs.get('aliases')
         order_accu_funcs = kwargs.get('order_accu_funcs', {})
 
         # list of AccuFuncCls
@@ -57,9 +58,17 @@ class GroupBy(object):
             return self._dimension_accufuncs
 
         ret = OrderedDict()
-        for d, acc_vals in self._dimension_accufuncs.items():
-            if self._accu_selector(dict([(a.key(), a.val()) for a in acc_vals])):
-                rows[d] = acc_vals
+        for d, acc_vals_row in self._dimension_accufuncs.items():
+            # add aliases
+            if self._aliases:
+                for k, acc_fn in acc_vals_row.items():
+                    if k in self._aliases['to_alias']:
+                        acc_vals_row[self._aliases['to_alias'][k]] = acc_fn
+
+            if not self._accu_selector or \
+                    self._accu_selector(dict([(k, fn.val()) for k, fn in acc_vals_row.items()])):
+                rows[d] = acc_vals_row
+
         return ret
 
     def get_dimension_rows(self):
@@ -68,8 +77,14 @@ class GroupBy(object):
         '''
         rows = []
         for d, acc_vals_row in self._dimension_accufuncs.items():
+            # add aliases
+            if self._aliases:
+                for k, acc_fn in acc_vals_row.items():
+                    if k in self._aliases['to_alias']:
+                        acc_vals_row[self._aliases['to_alias'][k]] = acc_fn
+
             if not self._accu_selector or \
-                    self._accu_selector(dict([(a.key(), a.val()) for a in acc_vals_row.values()])):
+                    self._accu_selector(dict([(k, fn.val()) for k, fn in acc_vals_row.items()])):
                 acc_vals_row[self._dim_name] = d
                 rows.append(acc_vals_row)
 

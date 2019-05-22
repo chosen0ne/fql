@@ -85,6 +85,10 @@ def execute(**kwargs):
             group_fields = g_stmt['dimension_aggr']
             aggregation_alias_replace(aliases['from_alias'], group_fields, s_stmt['dimension_aggr'])
 
+            if 'having' in g_stmt:
+                having_fields = g_stmt['having']['aggregations']
+                aggregation_alias_replace(aliases['from_alias'], having_fields, s_stmt['aggregations'])
+
     if show_fields:
         query_mode = MODE_SELECT_FIELDS
     elif not g_stmt:
@@ -106,6 +110,7 @@ def execute(**kwargs):
 
     g_stmt['accu_funcs'] = accu_funcs
     g_stmt['order_accu_funcs'] = o_stmt['aggregations'] if o_stmt else None
+    g_stmt['aliases'] = aliases
 
     groupby = GroupBy(**g_stmt)
     if query_mode == MODE_GROUP_AGGR and dim_fields != groupby.get_dim_name():
