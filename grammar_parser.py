@@ -75,45 +75,30 @@ grammar:
 
     factor : name_factor
            | size_factor
-           | ctime_factor
-           | mtime_factor
-           | atime_factor
+           | time_factor
            | '(' condition_statement ')'
            | NOT factor
 
     name_factor : NAME '=' QUOTE FNAME QUOTE
                 | NAME LIKE QUOTE FNAME QUOTE
 
-    size_factor : SIZE '=' NUMBER
-                | SIZE '>' NUMBER
-                | SIZE '<' NUMBER
-                | SIZE NE NUMBER
-                | SIZE GE NUMBER
-                | SIZE LE NUMBER
+    cmp_op_sub_factor : '='
+                      | '>'
+                      | '<'
+                      | NE
+                      | GE
+                      | LE
+
+    size_factor : SIZE cmp_op_sub_factor NUMBER
 
     datetime_factor : DATE
                     | DATE TIME
 
-    ctime_factor : CTIME '=' datetime_factor
-                 | CTIME '>' datetime_factor
-                 | CTIME GE datetime_factor
-                 | CTIME '<' datetime_factor
-                 | CTIME LE datetime_factor
-                 | CTIME NE datetime_factor
+    time_field : CTIME
+               | MTIME
+               | ATIME
 
-    mtime_factor : MTIME '=' datetime_factor
-                 | MTIME '>' datetime_factor
-                 | MTIME GE datetime_factor
-                 | MTIME '<' datetime_factor
-                 | MTIME LE datetime_factor
-                 | MTIME NE datetime_factor
-
-    atime_factor : ATIME '=' datetime_factor
-                 | ATIME '>' datetime_factor
-                 | ATIME GE datetime_factor
-                 | ATIME '<' datetime_factor
-                 | ATIME LE datetime_factor
-                 | ATIME NE datetime_factor
+    time_factor : time_field cmp_op_sub_factor datetime_factor
 
     order_sub_factor : a_field
                      | accu_func_factor
@@ -124,15 +109,11 @@ grammar:
                  | order_sub_factor ASC
                  | order_sub_factor DESC
 
-    time_factor : ATIME
-                | CTIME
-                | MTIME
-
-    group_func_factor : MINUTE '(' time_factor ')'
-                      | HOUR '(' time_factor ')'
-                      | DAY '(' time_factor ')'
-                      | MONTH '(' time_factor ')'
-                      | YEAR '(' time_factor ')'
+    group_func_factor : MINUTE '(' time_field ')'
+                      | HOUR '(' time_field ')'
+                      | DAY '(' time_field ')'
+                      | MONTH '(' time_field ')'
+                      | YEAR '(' time_field ')'
                       | FTYPE
 
     having_statement : HAVING having_condition
@@ -146,12 +127,7 @@ grammar:
     having_sub_factor : accu_func_factor
                       | FNAME
 
-    having_factor : having_sub_factor '=' NUMBER
-                  | having_sub_factor NE NUMBER
-                  | having_sub_factor '>' NUMBER
-                  | having_sub_factor GE NUMBER
-                  | having_sub_factor '<' NUMBER
-                  | having_sub_factor LE NUMBER
+    having_factor : having_sub_factor cmp_op_sub_factor NUMBER
                   | '(' having_condition ')'
                   | NOT having_factor
 
@@ -165,12 +141,12 @@ grammar:
 
 # used to compare file stats, such as st_size, st_ctime, st_atime...
 fstat_cmp_operators = {
-        '=': lambda field, val: lambda finfo: getattr(finfo['stat'], field) == val,
-        '>': lambda field, val: lambda finfo: getattr(finfo['stat'], field) > val,
-        '<': lambda field, val: lambda finfo: getattr(finfo['stat'], field) < val,
-        '!=': lambda field, val: lambda finfo: getattr(finfo['stat'], field) != val,
-        '>=': lambda field, val: lambda finfo: getattr(finfo['stat'], field) >= val,
-        '<=': lambda field, val: lambda finfo: getattr(finfo['stat'], field) <= val
+        '=': lambda field, val: lambda finfo: int(getattr(finfo['stat'], field)) == val,
+        '>': lambda field, val: lambda finfo: int(getattr(finfo['stat'], field)) > val,
+        '<': lambda field, val: lambda finfo: int(getattr(finfo['stat'], field)) < val,
+        '!=': lambda field, val: lambda finfo: int(getattr(finfo['stat'], field)) != val,
+        '>=': lambda field, val: lambda finfo: int(getattr(finfo['stat'], field)) >= val,
+        '<=': lambda field, val: lambda finfo: int(getattr(finfo['stat'], field)) <= val
 }
 
 
@@ -423,9 +399,7 @@ def p_factor(p):
     '''
         factor : name_factor
                | size_factor
-               | ctime_factor
-               | mtime_factor
-               | atime_factor
+               | time_factor
                | '(' condition_statement ')'
                | NOT factor
     '''
@@ -453,14 +427,21 @@ def p_name_factor(p):
         p[0] = lambda finfo: pattern.match(finfo['name']) is not None
 
 
+def p_num_cmp_sub_factor(p):
+    '''
+        cmp_op_sub_factor : '='
+                          | '>'
+                          | '<'
+                          | NE
+                          | GE
+                          | LE
+    '''
+    p[0] = p[1]
+
+
 def p_size_factor(p):
     '''
-        size_factor : SIZE '=' NUMBER
-                    | SIZE '>' NUMBER
-                    | SIZE '<' NUMBER
-                    | SIZE NE NUMBER
-                    | SIZE GE NUMBER
-                    | SIZE LE NUMBER
+        size_factor : SIZE cmp_op_sub_factor NUMBER
     '''
     _, _, op, fsize = p
     cmp_func = fstat_cmp_operators[op]
@@ -477,38 +458,19 @@ def p_datetime_factor(p):
     else:
         p[0] = datetime.strptime(p[1] + ' ' + p[2], '%Y-%m-%d %H:%M:%S')
 
-def p_ctime_factor(p):
+
+def p_time_field(p):
     '''
-        ctime_factor : CTIME '=' datetime_factor
-                     | CTIME '>' datetime_factor
-                     | CTIME GE datetime_factor
-                     | CTIME '<' datetime_factor
-                     | CTIME LE datetime_factor
-                     | CTIME NE datetime_factor
+        time_field : CTIME
+                   | MTIME
+                   | ATIME
     '''
-    time_proc(p)
+    p[0] = p[1]
 
 
-def p_mtime_factor(p):
+def p_time_factor(p):
     '''
-        mtime_factor : MTIME '=' datetime_factor
-                     | MTIME '>' datetime_factor
-                     | MTIME GE datetime_factor
-                     | MTIME '<' datetime_factor
-                     | MTIME LE datetime_factor
-                     | MTIME NE datetime_factor
-    '''
-    time_proc(p)
-
-
-def p_atime_factor(p):
-    '''
-        atime_factor : ATIME '=' datetime_factor
-                     | ATIME '>' datetime_factor
-                     | ATIME GE datetime_factor
-                     | ATIME '<' datetime_factor
-                     | ATIME LE datetime_factor
-                     | ATIME NE datetime_factor
+        time_factor : time_field cmp_op_sub_factor datetime_factor
     '''
     time_proc(p)
 
@@ -583,22 +545,13 @@ def p_limit_statement(p):
         p[0][1].append(p[4])
 
 
-def p_time_factor(p):
-    '''
-        time_factor : ATIME
-                    | CTIME
-                    | MTIME
-    '''
-    p[0] = p[1]
-
-
 def p_group_func_factor(p):
     '''
-        group_func_factor : MINUTE '(' time_factor ')'
-                          | HOUR '(' time_factor ')'
-                          | DAY '(' time_factor ')'
-                          | MONTH '(' time_factor ')'
-                          | YEAR '(' time_factor ')'
+        group_func_factor : MINUTE '(' time_field ')'
+                          | HOUR '(' time_field ')'
+                          | DAY '(' time_field ')'
+                          | MONTH '(' time_field ')'
+                          | YEAR '(' time_field ')'
                           | FTYPE
     '''
     if len(p) == 5:
@@ -653,12 +606,7 @@ def p_having_sub_factor(p):
 
 def p_having_factor(p):
     '''
-        having_factor : having_sub_factor '=' NUMBER
-                      | having_sub_factor NE NUMBER
-                      | having_sub_factor '>' NUMBER
-                      | having_sub_factor GE NUMBER
-                      | having_sub_factor '<' NUMBER
-                      | having_sub_factor LE NUMBER
+        having_factor : having_sub_factor cmp_op_sub_factor NUMBER
                       | '(' having_condition ')'
                       | NOT having_factor
     '''
