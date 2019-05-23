@@ -23,8 +23,11 @@ MODE_SELECT_AGGR = 2
 MODE_GROUP_AGGR = 3
 
 
-def execute_statement(stmt, conf=None):
+def execute_statement(stmt, conf={}):
     stmts = parser.parse(stmt)
+    if stmts is None:
+        raise Exception('failed to parse, statement: %s' % stmt)
+
     stmts.update(conf)
     execute(**stmts)
 
