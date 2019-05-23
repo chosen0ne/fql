@@ -124,8 +124,13 @@ def execute(**kwargs):
     g_stmt['aliases'] = aliases
 
     if is_debug:
-        p = {'select': s_stmt, 'order': o_stmt, 'l_stmt': l_stmt,
-             'group': g_stmt, 'where': w_stmt}
+        p = {
+            'select': s_stmt,
+            'order': o_stmt,
+            'l_stmt': l_stmt,
+            'group': g_stmt,
+            'where': w_stmt
+        }
         o = json.dumps(p, indent=4, separators=(',', ':'),
                        cls=OuputJsonEncoder)
         print 'kwargs processed: ', o
