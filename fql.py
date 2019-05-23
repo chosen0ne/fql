@@ -15,15 +15,16 @@ _fql_version = '0.1.0'
 
 
 class FqlCmd(cmd.Cmd):
-    def __init__(self):
+    def __init__(self, conf):
         cmd.Cmd.__init__(self)
         self.prompt = 'fql> '
+        self._conf = conf
 
     def do_select(self, arg):
         '''
         use fql to query file infos
         '''
-        execute_statement('select ' + arg)
+        execute_statement('select ' + arg, self._conf)
 
     def do_exit(self, arg):
         '''
@@ -70,5 +71,5 @@ if __name__ == '__main__':
         execute_statement(' '.join(args), conf)
         sys.exit()
 
-    c = FqlCmd()
+    c = FqlCmd(conf)
     c.cmdloop()
