@@ -51,6 +51,8 @@ def opt_parse():
                       type='int', help='max depth to travel')
     parser.add_option('-g', '--debug', dest='debug', default=False,
                       help='show debug information', action='store_true')
+    parser.add_option('-b', '--border', dest='border', default=True,
+                      help='show table boder or not', action='store_false')
 
     return parser.parse_args()
 
@@ -65,7 +67,7 @@ if __name__ == '__main__':
         show_version()
         sys.exit()
 
-    conf = {'depth': opt.depth, 'debug': opt.debug}
+    conf = {'depth': opt.depth, 'debug': opt.debug, 'show_border': opt.border}
 
     if args:
         execute_statement(' '.join(args), conf)

@@ -73,6 +73,7 @@ def execute(**kwargs):
 
     is_debug = kwargs.get('debug')
     max_depth = kwargs.get('depth')
+    show_border = kwargs.get('show_border')
 
     if is_debug:
         o = json.dumps(kwargs, indent=4, separators=(',', ':'),
@@ -169,12 +170,12 @@ def execute(**kwargs):
         rows = rows[s: s+c]
 
     if query_mode == MODE_SELECT_FIELDS:
-        printer = FieldPrinter(show_fields, rows, aliases)
+        printer = FieldPrinter(show_fields, rows, aliases, show_border)
     elif query_mode == MODE_SELECT_AGGR:
-        printer = AggregatePrinter(f_stmt, rows, aliases)
+        printer = AggregatePrinter(f_stmt, rows, aliases, show_border)
     elif query_mode == MODE_GROUP_AGGR:
         printer = GroupPrinter(rows, groupby.get_dim_name(), accu_funcs,
-                               aliases)
+                               aliases, show_border)
 
     printer.print_table()
 

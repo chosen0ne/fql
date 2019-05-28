@@ -14,46 +14,58 @@ ALL_FIELDS = ['name', 'ctime', 'mtime', 'atime', 'size']
 
 
 class Printer(object):
+
+    _col_sep = '|'
+    _row_sep = '-'
+    _sep_line = None
+
     def fields(self):
         return []
 
     def rows(self):
         return []
 
+    def no_border(self):
+        self._col_sep, self._row_sep = '', ''
+
+    def print_sep_line(self):
+        if self._sep_line:
+            print self._sep_line
+
     def print_table(self):
         fields = self.fields()
         rows = self.rows()
 
         cols_width = self._calc_cols_width(fields, rows)
-        sep_line = self._get_sep_line(cols_width)
+        self._sep_line = self._get_sep_line(cols_width)
 
         # title
         if fields:
-            print sep_line
+            self.print_sep_line()
 
             for f, w in zip(fields, cols_width):
                 self._print_val(f, w)
 
-            print '|'
+            print self._col_sep
 
         if rows:
-            print sep_line
+            self.print_sep_line()
             for r in rows:
                 for v, w in zip(r, cols_width):
                     self._print_val(v, w)
 
-                print '|'
-                print sep_line
+                print self._col_sep
+                self.print_sep_line()
 
         else:
-            print sep_line
+            self.print_sep_line()
 
     def _get_sep_line(self, fields_len):
         # each field include '|', ' ', field, ' ' => 3
         # and the trailing '|' in each row
         padding = len(fields_len) * 3 + 1
         count = sum(fields_len)
-        sep_line = ''.join(itertools.repeat('-', count + padding))
+        sep_line = ''.join(itertools.repeat(self._row_sep, count + padding))
 
         return sep_line
 
@@ -91,11 +103,11 @@ class Printer(object):
         return 'G', size
 
     def _print_val(self, val, width):
-        print ('| %-' + str(width) + 's') % val,
+        print (self._col_sep + ' %-' + str(width) + 's') % val,
 
 
 class FieldPrinter(Printer):
-    def __init__(self, show_fields, files, aliases):
+    def __init__(self, show_fields, files, aliases, show_border):
         if len(show_fields) == 1 and '*' in show_fields:
             self._select_fields = ALL_FIELDS
         else:
@@ -106,6 +118,9 @@ class FieldPrinter(Printer):
         for f in files:
             self._rows.append([self._fetch_val(field, f) for field in
                               self._select_fields])
+
+        if not show_border:
+            self.no_border()
 
     def _fetch_val(self, field, finfo):
         fname = finfo['name']
@@ -132,7 +147,7 @@ class FieldPrinter(Printer):
 
 
 class AggregatePrinter(Printer):
-    def __init__(self, from_dir, accu_funcs, aliases):
+    def __init__(self, from_dir, accu_funcs, aliases, show_border):
         self._rows = []
         for fn in accu_funcs.values():
             f = aliases['to_alias'][fn.key()] if aliases and \
@@ -146,12 +161,15 @@ class AggregatePrinter(Printer):
 
             self._rows.append((field_name, str(val)))
 
+        if not show_border:
+            self.no_border()
+
     def rows(self):
         return self._rows
 
 
 class GroupPrinter(Printer):
-    def __init__(self, dim_rows, dim_name, accu_fns, aliases):
+    def __init__(self, dim_rows, dim_name, accu_fns, aliases, show_border):
         self._fields = [dim_name]
         self._fields.extend([f().key() for f in accu_fns.values()])
         self._aliases = aliases
@@ -173,6 +191,9 @@ class GroupPrinter(Printer):
                 r.append(val)
 
             self._rows.append(r)
+
+        if not show_border:
+            self.no_border()
 
     def fields(self):
         a = self._aliases
