@@ -81,6 +81,7 @@ grammar:
            | NOT factor
 
     name_factor : NAME '=' QUOTE FNAME QUOTE
+                | NAME NE QUOTE FNAME QUOTE
                 | NAME LIKE QUOTE FNAME QUOTE
 
     cmp_op_sub_factor : '='
@@ -452,11 +453,14 @@ def p_factor(p):
 def p_name_factor(p):
     '''
         name_factor : NAME '=' QUOTE FNAME QUOTE
+                    | NAME NE QUOTE FNAME QUOTE
                     | NAME LIKE QUOTE FNAME QUOTE
     '''
     _, _, op, _, fname, _ = p
     if op == '=':
         p[0] = lambda finfo, alias: finfo['name'] == fname
+    elif op == '!=':
+        p[0] = lambda finfo, alias: finfo['name'] != fname
     else:
         fname = fname.replace('.', '\.')
         fname = fname.replace('%', '.*')
@@ -736,7 +740,7 @@ def p_error(p):
     if not p:
         print 'End of file'
         return
-    print 'parse error, unexpected token:', p.type
+    print 'parse error, unexpected token:', p.type, p.value
 
 
 parser = yacc.yacc()

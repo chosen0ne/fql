@@ -111,7 +111,7 @@ def t_NUMBER(t):
 
 
 def t_FNAME(t):
-    r'[^ \t\n=\(\)\*\<\>\'",]+'
+    r'[^ \t\n=\(\)\*\<\>\'",!]+'
     if t.value in reserved:
         t.type = reserved[t.value]
         return t
@@ -136,7 +136,7 @@ def t_error(t):
 lexer = lex.lex()
 
 if __name__ == '__main__':
-    stmt = 'select * from . where ctime < 2015-01-20 16:55:00 and '\
+    stmt = 'select * from . where ctime != 2015-01-20 16:55:00 and '\
            'name = \'test\' order by name asc'
     lexer.input(stmt)
     for t in lexer:
