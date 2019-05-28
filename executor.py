@@ -140,7 +140,8 @@ def execute(**kwargs):
         print 'kwargs processed: ', o
 
     groupby = GroupBy(**g_stmt)
-    if query_mode == MODE_GROUP_AGGR and dim_fields != groupby.get_dim_name():
+    if query_mode == MODE_GROUP_AGGR and dim_fields is not None and \
+            dim_fields != groupby.get_dim_name():
         raise Exception('Dimensions in select and group by are different, '
                         'select: %s, group by: %s'
                         % (dim_fields, groupby.get_dim_name()))
