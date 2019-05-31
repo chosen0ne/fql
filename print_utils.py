@@ -10,7 +10,7 @@ from datetime import datetime
 from accu_func import AccuFuncCls
 
 
-ALL_FIELDS = ['name', 'ctime', 'mtime', 'atime', 'size']
+ALL_FIELDS = ['name', 'path', 'ctime', 'mtime', 'atime', 'size']
 
 
 class Printer(object):
@@ -123,9 +123,10 @@ class FieldPrinter(Printer):
             self.no_border()
 
     def _fetch_val(self, field, finfo):
-        fname = finfo['name']
         if field == 'name':
-            return fname
+            return finfo['name']
+        elif field == 'path':
+            return finfo['path']
         else:
             f = 'st_' + field
             statinfo = finfo['stat']

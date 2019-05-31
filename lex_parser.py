@@ -31,6 +31,7 @@ reserved = {
     'count': 'COUNT',
     # fields name
     'name': 'NAME',
+    'path': 'PATH',
     'size': 'SIZE',
     'ctime': 'CTIME',
     'mtime': 'MTIME',
@@ -81,6 +82,7 @@ t_AVG = r'(avg)|(AVG)'
 t_SUM = r'(sum)|(SUM)'
 t_COUNT = r'(count)|(COUNT)'
 t_NAME = r'(\name)|(\NAME)'
+t_PATH = r'(path)|(PATH)'
 t_SIZE = r'(\size)|(\SIZE)'
 t_CTIME = r'(\ctime)|(\CTIME)'
 t_MTIME = r'(\mtime)|(\MTIME)'

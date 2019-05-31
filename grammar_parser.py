@@ -48,6 +48,7 @@ grammar:
                     | LIMIT NUMBER ',' NUMBER
 
     a_field : NAME
+            | PATH
             | SIZE
             | CTIME
             | MTIME
@@ -351,6 +352,7 @@ def p_select_factor(p):
 def p_a_field(p):
     '''
         a_field : NAME
+                | PATH
                 | SIZE
                 | CTIME
                 | MTIME

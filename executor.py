@@ -194,7 +194,7 @@ def travel_file_tree(start_point, selector, files, groupby, cur_depth=1,
     for f in g:
         statinfo = os.stat(f)
         fname = os.path.basename(f)
-        finfo = {'name': fname, 'stat': statinfo}
+        finfo = {'name': fname, 'stat': statinfo, 'path': start_point}
         if selector(finfo, groupby.get_aliases()):
             files.append(finfo)
 
@@ -209,11 +209,11 @@ def _fields_order_cmp(order_keys):
     def inner_cmp(a, b):
         # type of a, b is (filename, fstat)
         for k, ad in order_keys.items():
-            if k == 'name':
-                if a['name'] == b['name']:
+            if k == 'name' or k == 'path':
+                if a[k] == b[k]:
                     continue
-                return cmp(a['name'], b['name']) if ad == 'asc' else \
-                    cmp(b['name'], a['name'])
+                return cmp(a[k], b[k]) if ad == 'asc' else \
+                    cmp(b[k], a[k])
             else:
                 vala = int(getattr(a['stat'], 'st_' + k))
                 valb = int(getattr(b['stat'], 'st_' + k))
